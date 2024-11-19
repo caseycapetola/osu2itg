@@ -50,4 +50,5 @@ fn main() {
 
     let song = Song::new("WINGS OF JUSTICE".to_string(), "GALNERYUS".to_string(), "Sotarks".to_string(), "FLYING TOWARDS JUSTICE".to_string());
     println!("{}", song.get_song_details());
+    parser.create_chart(&file_data, "/Projects/osu2itg/test", "testing");
 }
