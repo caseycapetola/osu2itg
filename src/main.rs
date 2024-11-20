@@ -1,6 +1,5 @@
 mod osu_parser;
 
-// use std::fs::File;
 use crate::osu_parser::OsuParser;
 
 struct Song {
@@ -38,10 +37,15 @@ impl Song {
 }
 
 fn main() {
-    let mut parser = OsuParser::new("assets/Wings_of_Justice/woj.osu".to_string());
+    let mut parser = OsuParser::new("assets/Wings_of_Justice/woj_reduced.osu".to_string());
     println!("Hello, world!");
     println!("File: {:?}", parser.get_file());
+    parser.init_map();
     let file_data = parser.parse_file();
+    for i in file_data.iter() {
+        println!("{}", i);
+        println!("###");
+    }
     let song_details = parser.get_metadata(&file_data);
     for line in song_details.iter() {
         println!("{}", line);

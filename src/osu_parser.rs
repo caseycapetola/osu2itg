@@ -1,16 +1,25 @@
 // osu!std file parser
 
-use std::{fs::File, io::{Read, Write}, path::Path};
+use std::{collections::HashMap, fs::File, io::{Read, Write}, path::Path};
 
 pub struct OsuParser {
     file: String,
+    header_map: HashMap<String, String>,
 }
 
 impl OsuParser {
     pub fn new(file: String) -> Self {
         OsuParser {
             file,
+            header_map: HashMap::new(),
         }
+    }
+
+    pub fn init_map(&mut self) {
+        self.header_map.insert("Title".to_string(), "TITLE".to_string());
+        self.header_map.insert("Artist".to_string(), "ARTIST".to_string());
+        self.header_map.insert("Creator".to_string(), "CREDIT".to_string());
+        self.header_map.insert("AudioFilename".to_string(), "MUSIC".to_string());
     }
 
     pub fn get_file(&self) -> String {
@@ -24,13 +33,12 @@ impl OsuParser {
         return data;
     }
 
+    // Splits file by [Sections]
     pub fn parse_file(&mut self) -> Vec<String> {
         let data = self.read_file();
-        let collect = data.lines().map(|line| line.to_string()).collect::<Vec<String>>();
-        // for line in collect.iter() {
-        //     println!("{} ###", line);
-        // }
+        let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
         return collect;
+
     }
 
     // RELEVANT FIELDS (for ITG): Title, Artist, Creator, Version
@@ -51,36 +59,6 @@ impl OsuParser {
         song_details
     }
 
-    pub fn _get_general(&mut self, data: &Vec<String>) -> Vec<String> {
-        let mut song_details = vec![String::new()];
-        let mut iter = data.iter();
-
-        while let Some(line) = iter.next() {
-            if line.contains("[General]") {
-                while let Some(metadata_line) = iter.next() {
-                    if metadata_line.contains("[") {
-                        break;
-                    }
-                    song_details.push(metadata_line.clone());
-                }
-            }
-        }
-        song_details
-    }
-
-    pub fn _get_hit_objects(&mut self, data: &Vec<String>) -> Vec<String> {
-        let mut hit_objects = vec![String::new()];
-        let mut iter = data.iter();
-
-        while let Some(line) = iter.next() {
-            if line.contains("[HitObjects]") {
-                while let Some(hit_object_line) = iter.next() {
-                    hit_objects.push(hit_object_line.clone());
-                }
-            }
-        }
-        hit_objects
-    }
 
     pub fn create_chart(&mut self, _data: &Vec<String>, folder_path: &str, song_title: &str) {
         let filepath = Path::new(folder_path);
