@@ -1,4 +1,5 @@
 mod osu_parser;
+mod file_tools;
 
 use crate::osu_parser::OsuParser;
 
@@ -39,8 +40,6 @@ impl Song {
 fn main() {
     let mut parser = OsuParser::new("assets/Wings_of_Justice/woj_reduced.osu".to_string());
     println!("Hello, world!");
-    println!("File: {:?}", parser.get_file());
-    parser.init_map();
     let file_data = parser.parse_file();
     for i in file_data.iter() {
         println!("{}", i);
@@ -54,5 +53,8 @@ fn main() {
 
     let song = Song::new("WINGS OF JUSTICE".to_string(), "GALNERYUS".to_string(), "Sotarks".to_string(), "FLYING TOWARDS JUSTICE".to_string());
     println!("{}", song.get_song_details());
-    parser.create_chart(&file_data, "/Projects/osu2itg/test", "testing");
+    // parser.create_chart(&file_data, "/Projects/osu2itg/test", "testing");
+    println!("\n\n\n---------------------------");
+    parser.write_chart(&file_data, "E:\\Projects\\osu2itg\\test.sm");
+    println!("{}", parser.calc_bpm(&file_data));
 }
