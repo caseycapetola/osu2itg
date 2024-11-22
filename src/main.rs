@@ -1,7 +1,7 @@
 mod osu_parser;
 mod file_tools;
 
-use crate::osu_parser::OsuParser;
+use crate::osu_parser::{OsuParser, OsuHeader};
 
 struct Song {
     title: String,
@@ -46,8 +46,13 @@ fn main() {
         println!("###");
     }
     let song_details = parser.get_metadata(&file_data);
-    for line in song_details.iter() {
-        println!("{}", line);
+    match song_details {
+        OsuHeader::Metadata(metadata) => {
+            for line in metadata.iter() {
+                println!("{}", line);
+            }
+        },
+        _ => println!("No metadata found"),
     };
     println!("---------------------------");
 
@@ -55,6 +60,6 @@ fn main() {
     println!("{}", song.get_song_details());
     // parser.create_chart(&file_data, "/Projects/osu2itg/test", "testing");
     println!("\n\n\n---------------------------");
-    parser.write_chart(&file_data, "E:\\Projects\\osu2itg\\test.sm");
+    parser.write_chart(&file_data, "E:\\Projects\\osu2itg\\test.ssc");
     println!("{}", parser.calc_bpm(&file_data));
 }

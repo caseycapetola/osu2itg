@@ -1,5 +1,12 @@
 use std::path::PathBuf;
 
+// enum FileFields {
+//     OsuAudioFilename,
+//     SM5AudioFilename,
+//     OsuTitle,
+//     SM5Title,
+
+// }
 pub trait Deserialize {
     fn deserialize(&self) -> String;
 }
