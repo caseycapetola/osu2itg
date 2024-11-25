@@ -1,8 +1,9 @@
 // osu!std file parser
 use std::{fs::{File, Metadata}, io::{Read, Write}, path::{Path, PathBuf}}; //, collections::HashMap};
-use crate::file_tools::{Deserialize, OsuAudioFilename, OsuTitle, SM5AudioFilename, SM5Title};
+use crate::file_tools::{Deserialize, OsuAudioFilename, OsuPreviewTime, OsuTitle, SM5AudioFilename, SM5PreviewTime, SM5Title};
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum OsuHeader {
     General(Vec<String>),
     Editor(Vec<String>),
@@ -16,7 +17,7 @@ pub enum OsuHeader {
 
 pub struct OsuParser {
     file: String,
-    general: OsuHeader,
+    pub general: OsuHeader,
     editor: OsuHeader,
     metadata: OsuHeader,
     difficulty: OsuHeader,
@@ -26,87 +27,84 @@ pub struct OsuParser {
     hit_objects: OsuHeader,
 }
 
+// Parse osu! file headers
 fn parse_headers(file: String) -> [OsuHeader; 8] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
     let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
-    let mut headers: [OsuHeader; 8] = [OsuHeader::General(vec![]), OsuHeader::Editor(vec![]), OsuHeader::Metadata(vec![]), OsuHeader::Difficulty(vec![]), OsuHeader::Events(vec![]), OsuHeader::TimingPoints(vec![]), OsuHeader::Colours(vec![]), OsuHeader::HitObjects(vec![])];
+    let mut headers: [OsuHeader; 8] = [
+        OsuHeader::General(vec![]),
+        OsuHeader::Editor(vec![]),
+        OsuHeader::Metadata(vec![]),
+        OsuHeader::Difficulty(vec![]),
+        OsuHeader::Events(vec![]),
+        OsuHeader::TimingPoints(vec![]),
+        OsuHeader::Colours(vec![]),
+        OsuHeader::HitObjects(vec![])
+    ];
     let mut iter = collect.iter();
+    let mut attributes: Vec<String> = vec![];
+    let mut attr_index = 0;
+    let mut header_type = "".to_string();
     while let Some(line) = iter.next() {
-        if line.contains("[General]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[0] = OsuHeader::General(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
+        println!("attributes: {:?}", attributes);
+        if attr_index > 0 {
+            match header_type.as_str() {
+                "[General]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::General(attributes.clone());
+                    
+                },
+                "[Editor]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::Editor(attributes.clone());
+                },
+                "[Metadata]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::Metadata(attributes.clone());
+                },
+                "[Difficulty]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::Difficulty(attributes.clone());
+                },
+                "[Events]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::Events(attributes.clone());
+                },
+                "[TimingPoints]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::TimingPoints(attributes.clone());
+                },
+                "[Colours]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::Colours(attributes.clone());
+                },
+                "[HitObjects]" => {
+                    headers[attr_index-1 as usize] = OsuHeader::HitObjects(attributes.clone());
+                },
+                _ => (),
             }
         }
-        else if line.contains("[Editor]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[1] = OsuHeader::Editor(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
-            }
-        }
-        else if line.contains("[Metadata]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[2] = OsuHeader::Metadata(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
-            }
-        }
-        else if line.contains("[Difficulty]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[3] = OsuHeader::Difficulty(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
-            }
-        }
-        else if line.contains("[Events]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[4] = OsuHeader::Events(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
-            }
-        }
-        else if line.contains("[TimingPoints]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[5] = OsuHeader::TimingPoints(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
-            }
-        }
-        else if line.contains("[Colours]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[6] = OsuHeader::Colours(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>());
+        attr_index += 1;
+        attributes.clear();
+        header_type = "".to_string();
+        
 
+        for i in line.split("\r\n") {
+            if i.contains("osu file format") {
+                attr_index = 0;
+                break;
             }
-        }
-        else if line.contains("[HitObjects]") {
-            while let Some(header_line) = iter.next() {
-                if header_line.contains("[") {
-                    break;
-                }
-                headers[7] = OsuHeader::HitObjects(header_line.split("\r\n").map(|s| s.to_string()).collect::<Vec<String>>()); 
+            if i.contains("[") {
+                header_type = i.to_string();
+                println!("HEADER TYPE: {}", header_type);
+                continue;
             }
+            attributes.push(i.to_string());
+            
         }
     }
-    return headers;
+    headers
 }
 
 impl OsuParser {
     pub fn new(file: String) -> Self {
         let headers = parse_headers(file.clone());
-        OsuParser {
+        return OsuParser {
             file,
             general: headers[0].clone(),
             editor: headers[1].clone(),
@@ -118,17 +116,6 @@ impl OsuParser {
             hit_objects: headers[7].clone(),
         }
     }
-
-    // pub _fn init_map(&mut self) {
-    //     self.header_map.insert("Title".to_string(), "TITLE".to_string());
-    //     self.header_map.insert("Artist".to_string(), "ARTIST".to_string());
-    //     self.header_map.insert("Creator".to_string(), "CREDIT".to_string());
-    //     self.header_map.insert("AudioFilename".to_string(), "MUSIC".to_string());
-    // }
-
-    // pub fn _get_file(&self) -> String {
-    //     self.file.clone()
-    // } 
 
     // Reads file into string
     fn read_file(&mut self) -> String {
@@ -148,7 +135,19 @@ impl OsuParser {
 
     // Write fields to chart file
     pub fn write_chart(&mut self, osu_data: &Vec<String>, file: &str) {
-        const OSU_FIELDS: [&str; 2] = ["Title", "AudioFilename"];
+        // verify file is osu!std file
+        let general_data = match &self.general {
+            OsuHeader::General(data) => data,
+            _ => panic!("Invalid header type"),
+        };
+        println!("GENERAL DATA:\n{:?}", general_data);
+        let file_check = self.check_std(general_data);
+        match file_check.0 {
+            false => panic!("Could not configure ITG file: {}", file_check.1),
+            true => (),
+        }
+        
+        const OSU_FIELDS: [&str; 3] = ["Title", "AudioFilename", "PreviewTime"];
 
         // let mut file = File::create(file).expect("Unable to create file");
         let binding = file.to_string();
@@ -159,6 +158,8 @@ impl OsuParser {
             Err(why) => panic!("couldn't create {}: {}", display, why),
             Ok(file) => file,
         };
+        file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
+        self.write_general(&mut file);
         for i in osu_data.iter() {
             // SKIP OVER TIMING FOR NOW TO SIMPLIFY IMPLEMENTATION
             if i.contains("[TimingPoints]") || i.contains("[HitObjects]") || i.contains("[Events]") {
@@ -175,17 +176,11 @@ impl OsuParser {
                     let value = parts[1].trim();
                     if OSU_FIELDS.contains(&key) {
                         // Process key and value
-                        if key == "AudioFilename" {
-                            let osu_field = OsuAudioFilename { name: PathBuf::from(value) };
-                            let sm5_audio_filename: SM5AudioFilename = From::from(osu_field);
-                            file.write(sm5_audio_filename.deserialize().as_bytes()).expect("Unable to write data");
-                        }
-                        else if key == "Title" {
+                        if key == "Title" {
                             let osu_field = OsuTitle { name: PathBuf::from(value) };
                             let sm5_title: SM5Title = From::from(osu_field);
                             file.write(sm5_title.deserialize().as_bytes()).expect("Unable to write data");
                         }
-                        
                     }
                 }
             }
@@ -197,26 +192,53 @@ impl OsuParser {
         // file.write_all(b"").expect("Unable to write data");
     }
 
-    // RELEVANT FIELDS (for ITG): Title, Artist, Creator, Version
-    pub fn get_metadata(&mut self, _data: &Vec<String>) -> OsuHeader {
-        // let mut song_details = vec![String::new()];
-        // let mut iter = data.iter();
+    fn write_general(&mut self, file: &mut File) {
+        let general = match &self.general {
+            OsuHeader::General(data) => data,
+            _ => panic!("Invalid header type"),
+        };
+        const OSU_FIELDS: [&str; 2] = ["AudioFilename", "PreviewTime"];
 
-        // while let Some(line) = iter.next() {
-        //     if line.contains("[Metadata]") {
-        //         while let Some(metadata_line) = iter.next() {
-        //             if metadata_line.contains("[") {
-        //                 break;
-        //             }
-        //             song_details.push(metadata_line.clone());
-        //         }
-        //     }
-        // }
-        // song_details
-        self.metadata.clone()
+        for j in general.iter() {
+            // Split key value on ":"
+            let parts: Vec<&str> = j.split(":").collect();
+            if parts.len() == 2 {
+                let key = parts[0].trim();
+                let value = parts[1].trim();
+                if OSU_FIELDS.contains(&key) {
+                    // Process key and value
+                    if key == "AudioFilename" {
+                        let osu_field = OsuAudioFilename { name: PathBuf::from(value) };
+                        let sm5_audio_filename: SM5AudioFilename = From::from(osu_field);
+                        file.write(sm5_audio_filename.deserialize().as_bytes()).expect("Unable to write data");
+                    }
+                    else if key == "PreviewTime" {
+                        let time = value.parse::<u32>().unwrap();
+                        let osu_field = OsuPreviewTime { time };
+                        let sm5_preview_time: SM5PreviewTime = From::from(osu_field);
+                        file.write(sm5_preview_time.deserialize().as_bytes()).expect("Unable to write data");
+                    }
+                }
+            }
+        }
     }
-
-
+    
+    // Checks if file is osu!std file
+    fn check_std(&self, data: &Vec<String>) -> (bool, &str) {
+        let mut iter = data.iter();
+        while let Some(line) = iter.next() {
+            if line.contains("Mode") {
+                // Check if mode is 0
+                let mode = line.split(":").collect::<Vec<&str>>()[1].trim();
+                println!("MODE:{}", mode);
+                if mode == "0" {
+                    return (true, "");
+                }
+                return (false, "File passed is not osu!std file");
+            }
+        }
+        return (false, "Cannot determine if file is osu!std file");
+    }
     pub fn _create_chart(&mut self, _data: &Vec<String>, folder_path: &str, song_title: &str) {
         let filepath = Path::new(folder_path);
         let prefix = filepath.parent().unwrap();
@@ -235,6 +257,7 @@ impl OsuParser {
 
     }
 
+    // Calculate BPM from osu Timing Points
     pub fn calc_bpm(&self, data: &Vec<String>) -> f32 {
         let mut iter = data.iter();
         let mut bpm = 0.0;

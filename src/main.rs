@@ -39,22 +39,12 @@ impl Song {
 
 fn main() {
     let mut parser = OsuParser::new("assets/Wings_of_Justice/woj_reduced.osu".to_string());
-    println!("Hello, world!");
     let file_data = parser.parse_file();
-    for i in file_data.iter() {
-        println!("{}", i);
-        println!("###");
-    }
-    let song_details = parser.get_metadata(&file_data);
-    match song_details {
-        OsuHeader::Metadata(metadata) => {
-            for line in metadata.iter() {
-                println!("{}", line);
-            }
-        },
-        _ => println!("No metadata found"),
-    };
-    println!("---------------------------");
+    // for i in file_data.iter() {
+    //     println!("{}", i);
+    //     println!("###");
+    // }
+    // println!("---------------------------");
 
     let song = Song::new("WINGS OF JUSTICE".to_string(), "GALNERYUS".to_string(), "Sotarks".to_string(), "FLYING TOWARDS JUSTICE".to_string());
     println!("{}", song.get_song_details());
