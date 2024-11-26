@@ -1,12 +1,5 @@
 use std::path::PathBuf;
 
-// enum FileFields {
-//     OsuAudioFilename,
-//     SM5AudioFilename,
-//     OsuTitle,
-//     SM5Title,
-
-// }
 pub trait Deserialize {
     fn deserialize(&self) -> String;
 }
@@ -45,7 +38,7 @@ pub struct OsuTitle {
 
 impl Deserialize for OsuTitle {
     fn deserialize(&self) -> String {
-        return format!("Title:{}", self.name.display());
+        return format!("TitleUnicode:{}", self.name.display());
     }
 }
 
@@ -91,6 +84,62 @@ impl From<OsuPreviewTime> for SM5PreviewTime {
     fn from(value: OsuPreviewTime) -> Self {
         return SM5PreviewTime {
             time: value.time as f64 / 1000.0
+        }
+    }
+}
+
+pub struct OsuArtist {
+    pub name: PathBuf,
+}
+
+impl Deserialize for OsuArtist {
+    fn deserialize(&self) -> String {
+        return format!("ArtistUnicode:{}", self.name.display());
+    }
+}
+
+pub struct SM5Artist {
+    name: PathBuf
+}
+
+impl Deserialize for SM5Artist {
+    fn deserialize(&self) -> String {
+        return format!("#ARTIST:{};\n", self.name.display());
+    }
+}
+
+impl From<OsuArtist> for SM5Artist {
+    fn from(value: OsuArtist) -> Self {
+        return SM5Artist {
+            name: format!("{}", value.name.display()).into()
+        }
+    }
+}
+
+pub struct OsuVersion {
+    pub version: PathBuf,
+}
+
+impl Deserialize for OsuVersion {
+    fn deserialize(&self) -> String {
+        return format!("Version:{}", self.version.display());
+    }
+}
+
+pub struct SM5Version {
+    version: PathBuf
+}
+
+impl Deserialize for SM5Version {
+    fn deserialize(&self) -> String {
+        return format!("#SUBTITLE:{};\n", self.version.display());
+    }
+}
+
+impl From<OsuVersion> for SM5Version {
+    fn from(value: OsuVersion) -> Self {
+        return SM5Version {
+            version: format!("{}", value.version.display()).into()
         }
     }
 }
