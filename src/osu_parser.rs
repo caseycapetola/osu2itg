@@ -1,5 +1,5 @@
 // osu!std file parser
-use std::{fs::File, io::{Read, Write}, path::{Path, PathBuf}}; //, collections::HashMap};
+use std::{fs::File, io::{Read, Write, stdin, stdout}, path::{Path, PathBuf}}; //, collections::HashMap};
 use crate::file_tools::{Deserialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 
 #[derive(Clone)]
@@ -12,7 +12,7 @@ pub enum OsuHeader {
     // Events(Vec<String>),
     // TimingPoints(Vec<String>),
     // Colours(Vec<String>),
-    // HitObjects(Vec<String>),
+    HitObjects(Vec<String>),
 }
 
 pub struct OsuParser {
@@ -24,19 +24,20 @@ pub struct OsuParser {
     // events: OsuHeader,
     // timing_points: OsuHeader,
     // colours: OsuHeader,
-    // hit_objects: OsuHeader,
+    hit_objects: OsuHeader,
 }
 
 // TODO: Remove function when all headers are implemented
-fn temp_parse_headers(file: String) -> [OsuHeader; 2] {
+fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
     let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
 
-    let mut headers: [OsuHeader; 2] = [
+    let mut headers: [OsuHeader; 3] = [
         OsuHeader::General(vec![]),
         OsuHeader::Metadata(vec![]),
+        OsuHeader::HitObjects(vec![]),
     ];
     let mut iter = collect.iter();
     let mut attributes: Vec<String> = vec![];
@@ -51,6 +52,9 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 2] {
                 },
                 "[Metadata]" => {
                     headers[1] = OsuHeader::Metadata(attributes.clone());
+                },
+                "[HitObjects]" => {
+                    headers[2] = OsuHeader::HitObjects(attributes.clone());
                 },
                 _ => (),
             }
@@ -166,6 +170,7 @@ impl OsuParser {
 
             general: headers[0].clone(),
             metadata: headers[1].clone(),
+            hit_objects: headers[2].clone(),
         }
     }
 
@@ -212,9 +217,11 @@ impl OsuParser {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
+        let offset = self.write_offset(&mut file);
 
         let bpm = self.calc_bpm(osu_data);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
+        self.write_steps(&mut file, bpm, offset);
     }
 
     // Write general fields to chart file
@@ -286,6 +293,35 @@ impl OsuParser {
         }
     } 
 
+
+    // Write offset to chart file
+    fn write_offset(&self, file: &mut File) -> f32 {
+        let mut offset = String::new();
+        print!("Enter offset: ");
+        let _ = stdout().flush();
+        stdin().read_line(&mut offset).expect("Unable to read line");
+        file.write(format!("#OFFSET:{};\n", offset.trim()).as_bytes()).expect("Unable to write data");
+        // return offset as f32;
+        offset.parse::<f32>().unwrap()
+    }
+
+    // Write steps to chart file
+    fn write_steps(&self, file: &mut File, bpm: f32, offset: f32) {
+        file.write("//--------------- dance-single - osu2itg ----------------\n".as_bytes()).expect("Unable to write data");
+        file.write("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes()).expect("Unable to write data");
+        
+        let _measure_length = self.calc_qn_duration(bpm) * 4.0;
+
+        // [HitObjects]: x,y,time,type,hitSound,objectParams,hitSample
+        if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
+            for i in hit_objects.iter() {
+                let _parts: Vec<&str> = i.split(",").collect();
+                let _time = _parts[2].parse::<f32>().unwrap() - offset;
+                
+            }
+        }
+    }
+
     // Checks if file is osu!std file
     fn check_std(&self, data: &Vec<String>) -> (bool, &str) {
         let mut iter = data.iter();
@@ -321,5 +357,10 @@ impl OsuParser {
             }
         }
         bpm
+    }
+
+    // Calculate quarter note duration
+    fn calc_qn_duration(&self, bpm: f32) -> f32 {
+        60000.0 / bpm
     }
 }
