@@ -1,5 +1,5 @@
 // osu!std file parser
-use std::{fs::File, io::{Read, Write, stdin, stdout}, path::{Path, PathBuf}}; //, collections::HashMap};
+use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use crate::file_tools::{Deserialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 
 #[derive(Clone)]
@@ -24,7 +24,7 @@ pub struct OsuParser {
     // events: OsuHeader,
     // timing_points: OsuHeader,
     // colours: OsuHeader,
-    hit_objects: OsuHeader,
+    pub hit_objects: OsuHeader,
 }
 
 // TODO: Remove function when all headers are implemented
@@ -48,11 +48,10 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
             match header_type.as_str() {
                 "[General]" => {
                     headers[0] = OsuHeader::General(attributes.clone());
-                    
                 },
                 "[Metadata]" => {
                     headers[1] = OsuHeader::Metadata(attributes.clone());
-                },
+                }, 
                 "[HitObjects]" => {
                     headers[2] = OsuHeader::HitObjects(attributes.clone());
                 },
@@ -62,7 +61,6 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
         attr_index += 1;
         attributes.clear();
         header_type = "".to_string();
-        
 
         for i in line.split("\r\n") {
             if i.contains("osu file format") {
@@ -74,7 +72,22 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
                 continue;
             }
             attributes.push(i.to_string());
-            
+        }
+    }
+
+    // Ensure the last block of data is stored
+    if !attributes.is_empty() {
+        match header_type.as_str() {
+            "[General]" => {
+                headers[0] = OsuHeader::General(attributes.clone());
+            },
+            "[Metadata]" => {
+                headers[1] = OsuHeader::Metadata(attributes.clone());
+            },
+            "[HitObjects]" => {
+                headers[2] = OsuHeader::HitObjects(attributes.clone());
+            },
+            _ => (),
         }
     }
     headers
@@ -217,11 +230,11 @@ impl OsuParser {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
-        let offset = self.write_offset(&mut file);
+        let _offset = self.write_offset(&mut file);
 
         let bpm = self.calc_bpm(osu_data);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
-        self.write_steps(&mut file, bpm, offset);
+        self.write_steps(&mut file, bpm).expect("Unable to write steps");
     }
 
     // Write general fields to chart file
@@ -300,26 +313,105 @@ impl OsuParser {
         print!("Enter offset: ");
         let _ = stdout().flush();
         stdin().read_line(&mut offset).expect("Unable to read line");
-        file.write(format!("#OFFSET:{};\n", offset.trim()).as_bytes()).expect("Unable to write data");
-        // return offset as f32;
-        offset.parse::<f32>().unwrap()
+
+        let trimmed_offset = offset.trim();
+
+        file.write(format!("#OFFSET:{};\n", trimmed_offset).as_bytes()).expect("Unable to write data");
+
+        match trimmed_offset.parse::<f32>() {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("Unable to parse offset: {:?}", e);
+                0.0 // Return a default value or handle the error as needed
+            }
+        }
     }
 
     // Write steps to chart file
-    fn write_steps(&self, file: &mut File, bpm: f32, offset: f32) {
-        file.write("//--------------- dance-single - osu2itg ----------------\n".as_bytes()).expect("Unable to write data");
-        file.write("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes()).expect("Unable to write data");
-        
-        let _measure_length = self.calc_qn_duration(bpm) * 4.0;
+    fn write_steps(&self, file: &mut File, bpm: f32) -> io::Result<()> {
+        file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
+        file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
 
-        // [HitObjects]: x,y,time,type,hitSound,objectParams,hitSample
+        let measure_length = self.calc_qn_duration(bpm) * 4.0;
+        let quarter_note_duration = self.calc_qn_duration(bpm);
+        let eighth_note_duration = quarter_note_duration / 2.0;
+        let sixteenth_note_duration = quarter_note_duration / 4.0;
+
         if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
-            for i in hit_objects.iter() {
-                let _parts: Vec<&str> = i.split(",").collect();
-                let _time = _parts[2].parse::<f32>().unwrap() - offset;
-                
+            let _measures: Vec<Vec<(String, i32)>> = vec![];
+            let mut current_measure: Vec<(f32, i32)> = vec![];
+
+            // Determine the time of the first note
+            let first_note_time = hit_objects
+                .first()
+                .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
+                .unwrap_or(0.0);
+
+            let mut current_time = first_note_time; // TODO: Adjust this to align with the start of the measure
+            println!("FIRST NOTE TIME: {}", first_note_time);
+            println!("MEASURE LENGTH: {}", measure_length);
+
+            for hit_object in hit_objects.iter() {
+                let parts: Vec<&str> = hit_object.split(',').collect();
+                let note_time = parts[2].parse::<f32>().unwrap();
+                // println!("TIME: {}", note_time);
+
+                // Check if note is in the same measure
+                if note_time - current_time >= measure_length {
+                    // Flush current measure to measures buffer/file
+                    let max_value = current_measure
+                        .iter()
+                        .max_by_key(|&(_, value)| value)
+                        .map(|&(_, value)| value)
+                        .unwrap_or(0);
+                    
+                    let beat_count = measure_length / max_value as f32;
+                    for i in 0..max_value {
+                        let mut find = false;
+                        for (note, _value) in current_measure.iter() {
+                            if *note/beat_count - (i as f32) < 1.0 {
+                                find = true;
+                                file.write("1000\n".as_bytes()).expect("Unable to write data");
+                            }
+                        }
+                        if !find {
+                            file.write("0000\n".as_bytes()).expect("Unable to write data");
+                        }
+                    }
+                    file.write(",\n".as_bytes()).expect("Unable to write data");
+                    current_measure.clear();
+                    current_time += measure_length*max_value as f32;
+
+
+                    // Write empty measures
+                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32;
+                    while empty_count > 0 {
+                        file.write("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+                        empty_count -= 1;
+                        current_time += measure_length;
+                    }
+                }
+
+                // If in same measure, write note to current_measure buffer
+                let beat = (note_time - first_note_time)%measure_length;
+
+                if (beat-quarter_note_duration).abs() < 2.0 {
+                    current_measure.push((note_time%measure_length, 4));
+                }
+                else if (beat-eighth_note_duration).abs() < 2.0 {
+                    current_measure.push((note_time%measure_length, 8));
+                }
+                else if (beat-sixteenth_note_duration).abs() < 2.0 {
+                    current_measure.push((note_time%measure_length, 16));
+                }
+                else {
+                    current_measure.push((note_time%measure_length, 4));
+                }
             }
+
         }
+
+        Ok(())
     }
 
     // Checks if file is osu!std file
