@@ -332,10 +332,10 @@ impl OsuParser {
         file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
         file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
 
-        let measure_length = self.calc_qn_duration(bpm) * 4.0;
-        let quarter_note_duration = self.calc_qn_duration(bpm);
-        let eighth_note_duration = quarter_note_duration / 2.0;
-        let sixteenth_note_duration = quarter_note_duration / 4.0;
+        let measure_length = (self.calc_qn_duration(bpm) * 4.0).round(); // as i32;
+        let quarter_note_duration = self.calc_qn_duration(bpm).round();
+        let eighth_note_duration = (quarter_note_duration / 2.0).round();
+        let sixteenth_note_duration = (quarter_note_duration / 4.0).round();
 
         if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
             let _measures: Vec<Vec<(String, i32)>> = vec![];
@@ -350,41 +350,54 @@ impl OsuParser {
             let mut current_time = first_note_time; // TODO: Adjust this to align with the start of the measure
             println!("FIRST NOTE TIME: {}", first_note_time);
             println!("MEASURE LENGTH: {}", measure_length);
-
+            let mut prev_time: f32;
+            let mut note_time: f32 = 0.0;
             for hit_object in hit_objects.iter() {
                 let parts: Vec<&str> = hit_object.split(',').collect();
-                let note_time = parts[2].parse::<f32>().unwrap();
+                prev_time = note_time;
+                note_time = parts[2].parse::<f32>().unwrap();
                 // println!("TIME: {}", note_time);
 
                 // Check if note is in the same measure
-                if note_time - current_time >= measure_length {
+                if note_time  >= current_time {
+                    println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
                     // Flush current measure to measures buffer/file
                     let max_value = current_measure
                         .iter()
                         .max_by_key(|&(_, value)| value)
                         .map(|&(_, value)| value)
                         .unwrap_or(0);
-                    
+                    println!("WRITING...");
+                    println!("current_measure: {:?}", current_measure);
+                    println!("max_value: {}", max_value);
                     let beat_count = measure_length / max_value as f32;
+                    let mut found_tuples: Vec<(f32, i32)> = vec![];
                     for i in 0..max_value {
                         let mut find = false;
                         for (note, _value) in current_measure.iter() {
+                            // Check if the tuple is already in the found_tuples vector
+                            if found_tuples.iter().any(|&(n, _)| n == *note) {
+                                continue;
+                            }
                             if *note/beat_count - (i as f32) < 1.0 {
+                                println!("FOUND: {}", i);
                                 find = true;
-                                file.write("1000\n".as_bytes()).expect("Unable to write data");
+                                file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                                
+                                // Push a copy of the tuple to the found_tuples vector
+                                found_tuples.push((*note, *_value));
                             }
                         }
                         if !find {
-                            file.write("0000\n".as_bytes()).expect("Unable to write data");
+                            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
                         }
                     }
                     file.write(",\n".as_bytes()).expect("Unable to write data");
                     current_measure.clear();
-                    current_time += measure_length*max_value as f32;
-
 
                     // Write empty measures
-                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32;
+                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32 - 1;
+                    current_time += measure_length*empty_count as f32;
                     while empty_count > 0 {
                         file.write("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
                         empty_count -= 1;
@@ -393,19 +406,23 @@ impl OsuParser {
                 }
 
                 // If in same measure, write note to current_measure buffer
-                let beat = (note_time - first_note_time)%measure_length;
-
-                if (beat-quarter_note_duration).abs() < 2.0 {
-                    current_measure.push((note_time%measure_length, 4));
+                // let beat = note_time - first_note_time;
+                // println!("BEAT: {}", beat);
+                if (note_time-prev_time)%quarter_note_duration < 2.0 || (note_time-prev_time)%quarter_note_duration > quarter_note_duration-2.0 {
+                    // println!("QUARTER");
+                    current_measure.push(((note_time-first_note_time)%measure_length, 4));
                 }
-                else if (beat-eighth_note_duration).abs() < 2.0 {
-                    current_measure.push((note_time%measure_length, 8));
+                else if (note_time-prev_time)%eighth_note_duration < 2.0 || (note_time-prev_time)%eighth_note_duration > eighth_note_duration-2.0 {
+                    // println!("EIGHTH");
+                    current_measure.push(((note_time-first_note_time)%measure_length, 8));
                 }
-                else if (beat-sixteenth_note_duration).abs() < 2.0 {
-                    current_measure.push((note_time%measure_length, 16));
+                else if (note_time-prev_time)%sixteenth_note_duration < 2.0 || (note_time-prev_time)%sixteenth_note_duration > sixteenth_note_duration-2.0 {
+                    // println!("SIXTEENTH");
+                    current_measure.push(((note_time-first_note_time)%measure_length, 16));
                 }
                 else {
-                    current_measure.push((note_time%measure_length, 4));
+                    // println!("INITIAL");
+                    current_measure.push(((note_time-first_note_time)%measure_length, 4));
                 }
             }
 
