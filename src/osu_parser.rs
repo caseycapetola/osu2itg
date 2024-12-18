@@ -347,21 +347,28 @@ impl OsuParser {
                 .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
                 .unwrap_or(0.0);
 
-            let mut current_time = first_note_time; // TODO: Adjust this to align with the start of the measure
+            // Write one empty measure for buffer
+            file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+            
+            // Set current time to one measure ahead of first note
+            let mut current_time = first_note_time+measure_length;
             println!("FIRST NOTE TIME: {}", first_note_time);
             println!("MEASURE LENGTH: {}", measure_length);
             let mut prev_time: f32;
             let mut note_time: f32 = 0.0;
             for hit_object in hit_objects.iter() {
+                // Break apart HitObject and collect the note time
                 let parts: Vec<&str> = hit_object.split(',').collect();
                 prev_time = note_time;
                 note_time = parts[2].parse::<f32>().unwrap();
                 // println!("TIME: {}", note_time);
 
-                // Check if note is in the same measure
+                // Check if note is NOT in the same measure
                 if note_time  >= current_time {
                     println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
-                    // Flush current measure to measures buffer/file
+                    
+                    // Collect the shortest note value in the current measure 
+                    // -> Ensures we print the correct number of note rows for measure in .ssc file
                     let max_value = current_measure
                         .iter()
                         .max_by_key(|&(_, value)| value)
@@ -370,41 +377,48 @@ impl OsuParser {
                     println!("WRITING...");
                     println!("current_measure: {:?}", current_measure);
                     println!("max_value: {}", max_value);
+
+                    // beat_count = length of a beat in the measure (based on shortest note value)
                     let beat_count = measure_length / max_value as f32;
                     let mut found_tuples: Vec<(f32, i32)> = vec![];
+                    
+                    // For a given measure, write a note to the file if one exists, empty line otherwise
                     for i in 0..max_value {
-                        let mut find = false;
+                        let mut found_note = false;
                         for (note, _value) in current_measure.iter() {
-                            // Check if the tuple is already in the found_tuples vector
+                            // Check if note was already found in the measure
                             if found_tuples.iter().any(|&(n, _)| n == *note) {
                                 continue;
                             }
-                            if *note/beat_count - (i as f32) < 1.0 {
+                            if *note/beat_count - (i as f32) < 1.0 { // Can adjust this value to allow for more leniency in note timing conversion
                                 println!("FOUND: {}", i);
-                                find = true;
+                                found_note = true;
                                 file.write_all("1000\n".as_bytes()).expect("Unable to write data");
-                                
-                                // Push a copy of the tuple to the found_tuples vector
                                 found_tuples.push((*note, *_value));
                             }
                         }
-                        if !find {
+                        if !found_note {
                             file.write_all("0000\n".as_bytes()).expect("Unable to write data");
                         }
                     }
                     file.write(",\n".as_bytes()).expect("Unable to write data");
+                    
+                    // Flush current measure buffer
                     current_measure.clear();
 
-                    // Write empty measures
-                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32 - 1;
-                    current_time += measure_length*empty_count as f32;
+                    // Write empty measures if needed
+                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32 - 1; // -1 to account for the measure already written -> TBH not sure why it works, but it does
+                    println!("EMPTY COUNT: {}", empty_count);
                     while empty_count > 0 {
                         file.write("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
                         empty_count -= 1;
                         current_time += measure_length;
                     }
+                    current_time += measure_length;
                 }
 
+                // TODO: Add support for additional note types/timings
+                // TODO: Add check for hold notes
                 // If in same measure, write note to current_measure buffer
                 // let beat = note_time - first_note_time;
                 // println!("BEAT: {}", beat);
@@ -426,6 +440,32 @@ impl OsuParser {
                 }
             }
 
+            // Write the last measure
+            let max_value = current_measure
+                .iter()
+                .max_by_key(|&(_, value)| value)
+                .map(|&(_, value)| value)
+                .unwrap_or(0);
+            let beat_count = measure_length / max_value as f32;
+            let mut found_tuples: Vec<(f32, i32)> = vec![];
+            for i in 0..max_value {
+                let mut found_note = false;
+                for (note, _value) in current_measure.iter() {
+                    if found_tuples.iter().any(|&(n, _)| n == *note) {
+                        continue;
+                    }
+                    if *note/beat_count - (i as f32) < 1.0 {
+                        found_note = true;
+                        file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                        found_tuples.push((*note, *_value));
+                    }
+                }
+                if !found_note {
+                    file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                }
+            }
+            file.write(",\n".as_bytes()).expect("Unable to write data");
+            
         }
 
         Ok(())
