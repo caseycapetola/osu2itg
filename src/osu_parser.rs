@@ -348,8 +348,10 @@ impl OsuParser {
                 .unwrap_or(0.0);
 
             // Write one empty measure for buffer
-            file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+            file.write_all("// measure 0\n0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
             
+            let mut measure_count = 1;
+
             // Set current time to one measure ahead of first note
             let mut current_time = first_note_time+measure_length;
             println!("FIRST NOTE TIME: {}", first_note_time);
@@ -362,11 +364,24 @@ impl OsuParser {
                 prev_time = note_time;
                 note_time = parts[2].parse::<f32>().unwrap();
                 // println!("TIME: {}", note_time);
+                if note_time >=306773.0 && note_time <=308077.0 {
+                    // println!("NOTE_TIME: {}\nMEASURE {measure_count}: {:?}\n", note_time, current_measure);
+                    if note_time >= current_time {
+                        // println!("CURRENT_TIME: {}\nWRITING...", current_time);
+                    }
+                }
+                if note_time == 308077.0 { // TODO: REMOVE AFTER DEBUGGING!!!
+                    break;
+                }
+
 
                 // Check if note is NOT in the same measure
                 if note_time  >= current_time {
-                    println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
-                    
+                    // println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
+                    if note_time == current_time {
+                        println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
+                        println!("MEASURE {measure_count}: {:?}", current_measure);
+                    }
                     // Collect the shortest note value in the current measure 
                     // -> Ensures we print the correct number of note rows for measure in .ssc file
                     let max_value = current_measure
@@ -374,12 +389,16 @@ impl OsuParser {
                         .max_by_key(|&(_, value)| value)
                         .map(|&(_, value)| value)
                         .unwrap_or(0);
-                    println!("WRITING...");
-                    println!("current_measure: {:?}", current_measure);
-                    println!("max_value: {}", max_value);
+                    // println!("WRITING...");
+                    // println!("current_measure: {:?}", current_measure);
+                    // println!("max_value: {}", max_value);
+                    if current_measure.len() == 15 {
+                        println!("15 MEASURE {measure_count}: {:?}", current_measure);
+                    }
 
                     // beat_count = length of a beat in the measure (based on shortest note value)
                     let beat_count = measure_length / max_value as f32;
+                    // println!("BEAT COUNT: {}", beat_count);
                     let mut found_tuples: Vec<(f32, i32)> = vec![];
                     
                     // For a given measure, write a note to the file if one exists, empty line otherwise
@@ -391,26 +410,33 @@ impl OsuParser {
                                 continue;
                             }
                             if *note/beat_count - (i as f32) < 1.0 { // Can adjust this value to allow for more leniency in note timing conversion
-                                println!("FOUND: {}", i);
+                                // println!("FOUND: {}", i);
+                                // println!("NOTE: {}", note);
                                 found_note = true;
                                 file.write_all("1000\n".as_bytes()).expect("Unable to write data");
                                 found_tuples.push((*note, *_value));
+                                // print!("1");
                             }
                         }
                         if !found_note {
+                            // println!("i: {} --- Measure: {:?}", i, current_measure);
                             file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                            // print!("0");
                         }
+                        // println!("\nloop");
                     }
-                    file.write(",\n".as_bytes()).expect("Unable to write data");
-                    
+                    // println!("\nFound Tuples: {:?}", found_tuples);
+                    file.write(format!(", // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
+                    measure_count += 1;
                     // Flush current measure buffer
                     current_measure.clear();
 
                     // Write empty measures if needed
                     let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32 - 1; // -1 to account for the measure already written -> TBH not sure why it works, but it does
-                    println!("EMPTY COUNT: {}", empty_count);
+                    // println!("EMPTY COUNT: {}", empty_count);
                     while empty_count > 0 {
-                        file.write("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+                        file.write(format!("0000\n0000\n0000\n0000\n, // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
+                        measure_count += 1;
                         empty_count -= 1;
                         current_time += measure_length;
                     }
@@ -464,8 +490,8 @@ impl OsuParser {
                     file.write_all("0000\n".as_bytes()).expect("Unable to write data");
                 }
             }
-            file.write(",\n".as_bytes()).expect("Unable to write data");
-            
+            file.write(format!(", // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
+
         }
 
         Ok(())
