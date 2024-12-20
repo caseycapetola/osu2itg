@@ -2,3 +2,4 @@
 /assets
 notes.md
 *.ssc
+.DS_Store
