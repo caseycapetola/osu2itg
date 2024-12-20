@@ -1,6 +1,7 @@
 // osu!std file parser
 use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use crate::file_tools::{Deserialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
+use crate::osu_util::Delimiter;
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -32,8 +33,7 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
-    let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
-
+    let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
     let mut headers: [OsuHeader; 3] = [
         OsuHeader::General(vec![]),
         OsuHeader::Metadata(vec![]),
@@ -62,7 +62,7 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
         attributes.clear();
         header_type = "".to_string();
 
-        for i in line.split("\r\n") {
+        for i in line.split(Delimiter::WINDOWS) {
             if i.contains("osu file format") {
                 attr_index = 0;
                 break;
@@ -198,7 +198,7 @@ impl OsuParser {
     // Splits file by [Sections]
     pub fn parse_file(&mut self) -> Vec<String> {
         let data = self.read_file();
-        let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
+        let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
         return collect;
 
     }
@@ -519,7 +519,7 @@ impl OsuParser {
         let mut bpm = 0.0;
         while let Some(line) = iter.next() {
             if line.contains("[TimingPoints]") {
-                let timing_info = line.split("\r\n").collect::<Vec<&str>>();
+                let timing_info = line.split(Delimiter::WINDOWS).collect::<Vec<&str>>();
                 for i in timing_info.iter() {
                     if i.contains("[") {
                         continue;

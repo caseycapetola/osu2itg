@@ -1,4 +1,5 @@
 mod osu_parser;
+mod osu_util;
 mod file_tools;
 
 use crate::osu_parser::OsuParser;
