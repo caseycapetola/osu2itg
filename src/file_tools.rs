@@ -1,15 +1,15 @@
 use std::path::PathBuf;
 
-pub trait Deserialize {
-    fn deserialize(&self) -> String;
+pub trait Serialize {
+    fn serialize(&self) -> String;
 }
 
 pub struct OsuAudioFilename {
     pub name: PathBuf,
 }
 
-impl Deserialize for OsuAudioFilename {
-    fn deserialize(&self) -> String {
+impl Serialize for OsuAudioFilename {
+    fn serialize(&self) -> String {
         return format!("AudioFilename: {}", self.name.display());
     }
 }
@@ -18,8 +18,8 @@ pub struct SM5AudioFilename {
     name: PathBuf
 }
 
-impl Deserialize for SM5AudioFilename {
-    fn deserialize(&self) -> String {
+impl Serialize for SM5AudioFilename {
+    fn serialize(&self) -> String {
         return format!("#MUSIC:{}", self.name.display());
     }
 }
@@ -36,8 +36,8 @@ pub struct OsuTitle {
     pub name: PathBuf,
 }
 
-impl Deserialize for OsuTitle {
-    fn deserialize(&self) -> String {
+impl Serialize for OsuTitle {
+    fn serialize(&self) -> String {
         return format!("TitleUnicode:{}", self.name.display());
     }
 }
@@ -46,8 +46,8 @@ pub struct SM5Title {
     name: PathBuf
 }
 
-impl Deserialize for SM5Title {
-    fn deserialize(&self) -> String {
+impl Serialize for SM5Title {
+    fn serialize(&self) -> String {
         return format!("#TITLE:{}", self.name.display());
     }
 }
@@ -64,8 +64,8 @@ pub struct OsuPreviewTime {
     pub time: u32,
 }
 
-impl Deserialize for OsuPreviewTime {
-    fn deserialize(&self) -> String {
+impl Serialize for OsuPreviewTime {
+    fn serialize(&self) -> String {
         return format!("PreviewTime: {}", self.time.to_string());
     }
 }
@@ -74,8 +74,8 @@ pub struct SM5PreviewTime {
     time: f64
 }
 
-impl Deserialize for SM5PreviewTime {
-    fn deserialize(&self) -> String {
+impl Serialize for SM5PreviewTime {
+    fn serialize(&self) -> String {
         return format!("#SAMPLESTART:{};\n", self.time.to_string());
     }
 }
@@ -92,8 +92,8 @@ pub struct OsuArtist {
     pub name: PathBuf,
 }
 
-impl Deserialize for OsuArtist {
-    fn deserialize(&self) -> String {
+impl Serialize for OsuArtist {
+    fn serialize(&self) -> String {
         return format!("ArtistUnicode:{}", self.name.display());
     }
 }
@@ -102,8 +102,8 @@ pub struct SM5Artist {
     name: PathBuf
 }
 
-impl Deserialize for SM5Artist {
-    fn deserialize(&self) -> String {
+impl Serialize for SM5Artist {
+    fn serialize(&self) -> String {
         return format!("#ARTIST:{};\n", self.name.display());
     }
 }
@@ -120,8 +120,8 @@ pub struct OsuVersion {
     pub version: PathBuf,
 }
 
-impl Deserialize for OsuVersion {
-    fn deserialize(&self) -> String {
+impl Serialize for OsuVersion {
+    fn serialize(&self) -> String {
         return format!("Version:{}", self.version.display());
     }
 }
@@ -130,8 +130,8 @@ pub struct SM5Version {
     version: PathBuf
 }
 
-impl Deserialize for SM5Version {
-    fn deserialize(&self) -> String {
+impl Serialize for SM5Version {
+    fn serialize(&self) -> String {
         return format!("#SUBTITLE:{};\n", self.version.display());
     }
 }

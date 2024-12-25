@@ -1,6 +1,6 @@
 // osu!std file parser
 use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
-use crate::file_tools::{Deserialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
+use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 use crate::osu_util::Delimiter;
 
 #[derive(Clone)]
@@ -256,13 +256,13 @@ impl OsuParser {
                     if key == "AudioFilename" {
                         let osu_field = OsuAudioFilename { name: PathBuf::from(value) };
                         let sm5_audio_filename: SM5AudioFilename = From::from(osu_field);
-                        file.write(sm5_audio_filename.deserialize().as_bytes()).expect("Unable to write data");
+                        file.write(sm5_audio_filename.serialize().as_bytes()).expect("Unable to write data");
                     }
                     else if key == "PreviewTime" {
                         let time = value.parse::<u32>().unwrap();
                         let osu_field = OsuPreviewTime { time };
                         let sm5_preview_time: SM5PreviewTime = From::from(osu_field);
-                        file.write(sm5_preview_time.deserialize().as_bytes()).expect("Unable to write data");
+                        file.write(sm5_preview_time.serialize().as_bytes()).expect("Unable to write data");
                         file.write("#SAMPLELENGTH:20.000;\n".as_bytes()).expect("Unable to write data");
                     }
                 }
@@ -289,17 +289,17 @@ impl OsuParser {
                     if key == "TitleUnicode" {
                         let osu_field = OsuTitle { name: PathBuf::from(value) };
                         let sm5_title: SM5Title = From::from(osu_field);
-                        file.write(sm5_title.deserialize().as_bytes()).expect("Unable to write data");
+                        file.write(sm5_title.serialize().as_bytes()).expect("Unable to write data");
                     }
                     else if key == "ArtistUnicode" {
                         let osu_field = OsuArtist { name: PathBuf::from(value) };
                         let sm5_artist: SM5Artist = From::from(osu_field);
-                        file.write(sm5_artist.deserialize().as_bytes()).expect("Unable to write data");
+                        file.write(sm5_artist.serialize().as_bytes()).expect("Unable to write data");
                     }
                     else if key == "Version" {
                         let osu_field = OsuVersion { version: PathBuf::from(value) };
                         let sm5_version: SM5Version = From::from(osu_field);
-                        file.write(sm5_version.deserialize().as_bytes()).expect("Unable to write data");
+                        file.write(sm5_version.serialize().as_bytes()).expect("Unable to write data");
                     }
                 }
             }
