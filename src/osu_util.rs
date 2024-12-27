@@ -31,10 +31,10 @@ fn _note_type_to_itg(note_type: i8) -> i8 {
     note_type & 0b11
 }
 
-struct OsuDFA {
+pub struct OsuDFA {
     state: NoteState,
-    bpm: f64,
-    quarter_note: f64,
+    bpm: f32,
+    quarter_note: f32,
 }
 
 impl ops::Add<OsuDFA> for OsuDFA {
@@ -86,7 +86,7 @@ impl ops::Add<OsuDFA> for OsuDFA {
 }
 
 impl OsuDFA {
-    fn _new(bpm: f64) -> OsuDFA {
+    pub fn _new(bpm: f32) -> OsuDFA {
         OsuDFA {
             state: NoteState::Eighth,
             bpm,
@@ -94,7 +94,7 @@ impl OsuDFA {
         }
     }
 
-    fn _update(&mut self, distance: f64) -> Result<(), &'static str> {
+    pub fn _update(&mut self, distance: f32) -> Result<(), &'static str> {
         let mut new_state = self.state;
         let mut new_distance = distance;
 
@@ -124,7 +124,7 @@ impl OsuDFA {
         self.state
     }
 
-    fn _get_distance(&self, distance: f64) -> Option<NoteState> {
+    fn _get_distance(&self, distance: f32) -> Option<NoteState> {
         if (distance - self.quarter_note).abs() < 1.0 {
             return Some(NoteState::Eighth);
         }

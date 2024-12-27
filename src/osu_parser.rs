@@ -1,5 +1,6 @@
 // osu!std file parser
 use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
+use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 use crate::osu_util::Delimiter;
 
@@ -537,5 +538,78 @@ impl OsuParser {
     // Calculate quarter note duration
     fn calc_qn_duration(&self, bpm: f32) -> f32 {
         60000.0 / bpm
+    }
+
+    // Determine how many lines to print per measure
+    fn _get_min_beat_division(&self, bpm: f32) -> i32 {
+        if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
+            let mut note_time = hit_objects
+                .first()
+                .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
+                .unwrap_or(0.0);
+            let qn_duration = self.calc_qn_duration(bpm);
+            let mut note_types: Vec<i32> = Vec::new();
+
+            for i in hit_objects {
+                let prev_note_time = note_time;
+                note_time = i.split(',').nth(2).unwrap().parse::<f32>().unwrap();
+                if (note_time - prev_note_time + 2.0)%qn_duration < 4.0 {
+                    note_types.push(4);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/2.0) < 4.0 {
+                    note_types.push(8);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/3.0) < 4.0 {
+                    note_types.push(12);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/4.0) < 4.0 {
+                    note_types.push(16);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/6.0) < 4.0 {
+                    note_types.push(24);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/8.0) < 4.0 {
+                    note_types.push(32);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/12.0) < 4.0 {
+                    note_types.push(48);
+                }
+                else if (note_time - prev_note_time + 2.0)%(qn_duration/16.0) < 4.0 {
+                    note_types.push(64);
+                }
+                else {
+                    note_types.push(-1);
+                }
+            }
+            let mut lcm = 1;
+            while !note_types.is_empty() {
+                let curr_note = note_types.pop().unwrap();
+                lcm = lcm.lcm(&curr_note);
+            }
+            println!("LCM: {}", lcm);
+            return lcm;
+        }
+        -1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_min_beat_division() {
+        let parser = OsuParser::new("assets/REASON/reason_reduced.osu".to_string());
+        let bpm = 184.0;
+        let result = parser._get_min_beat_division(bpm);
+        println!("RESULT: {}", result);
+        assert_eq!(result, 16); // Replace with the expected value
+        
+        // 12th notes case
+        let parser2 = OsuParser::new("assets/yomiyori_real/yomiyori.osu".to_string());
+        let bpm2 = 220.0;
+        let result2 = parser2._get_min_beat_division(bpm2);
+        println!("RESULT: {}", result2);
+        assert_eq!(result2, 48); // Replace with the expected value
     }
 }
