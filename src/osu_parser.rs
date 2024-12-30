@@ -2,7 +2,7 @@
 use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
-use crate::osu_util::Delimiter;
+use crate::osu_util::{Delimiter, calc_qn_duration};
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -99,7 +99,7 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
 //     let mut f = File::open(file.clone()).expect("Unable to open file");
 //     let mut data = String::new();
 //     f.read_to_string(&mut data).expect("Unable to read data");
-//     let collect = data.split("\r\n\r\n").map(|s| s.to_string()).collect::<Vec<String>>();
+//     let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
 //     let mut headers: [OsuHeader; 8] = [
 //         OsuHeader::General(vec![]),
 //         OsuHeader::Editor(vec![]),
@@ -151,7 +151,7 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
 //         header_type = "".to_string();
         
 
-//         for i in line.split("\r\n") {
+//         for i in line.split(Delimiter::WINDOWS) {
 //             if i.contains("osu file format") {
 //                 attr_index = 0;
 //                 break;
@@ -328,173 +328,67 @@ impl OsuParser {
         }
     }
 
-    // Write steps to chart file
+    // Updated write steps function
     fn write_steps(&self, file: &mut File, bpm: f32) -> io::Result<()> {
         file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
         file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
-
-        let measure_length = (self.calc_qn_duration(bpm) * 4.0).round(); // as i32;
-        let quarter_note_duration = self.calc_qn_duration(bpm).round();
-        let eighth_note_duration = (quarter_note_duration / 2.0).round();
-        let sixteenth_note_duration = (quarter_note_duration / 4.0).round();
-
+        
+        // Write one empty measure for buffer
+        file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+        
+        let beat_division = self.get_min_beat_division(bpm);
+        
         if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
-            let _measures: Vec<Vec<(String, i32)>> = vec![];
-            let mut current_measure: Vec<(f32, i32)> = vec![];
 
-            // Determine the time of the first note
-            let first_note_time = hit_objects
-                .first()
-                .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
-                .unwrap_or(0.0);
+            // Use beat division to determine beat length
+            let beat_length = 240000.0/(bpm*beat_division as f32);
 
-            // Write one empty measure for buffer
-            file.write_all("// measure 0\n0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
-            
-            let mut measure_count = 1;
-
-            // Set current time to one measure ahead of first note
-            let mut current_time = first_note_time+measure_length;
-            println!("FIRST NOTE TIME: {}", first_note_time);
-            println!("MEASURE LENGTH: {}", measure_length);
             let mut prev_time: f32;
             let mut note_time: f32 = 0.0;
+            
+            // Track location in measure
+            let mut beat_count = 0;
+
             for hit_object in hit_objects.iter() {
                 // Break apart HitObject and collect the note time
                 let parts: Vec<&str> = hit_object.split(',').collect();
                 prev_time = note_time;
                 note_time = parts[2].parse::<f32>().unwrap();
-                // println!("TIME: {}", note_time);
-                if note_time >=306773.0 && note_time <=308077.0 {
-                    // println!("NOTE_TIME: {}\nMEASURE {measure_count}: {:?}\n", note_time, current_measure);
-                    if note_time >= current_time {
-                        // println!("CURRENT_TIME: {}\nWRITING...", current_time);
-                    }
-                }
-                if note_time == 308077.0 { // TODO: REMOVE AFTER DEBUGGING!!!
-                    break;
+
+                // Edge Case: First note
+                if prev_time == 0.0 {
+                    file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                    beat_count += 1;
+                    continue;
                 }
 
-
-                // Check if note is NOT in the same measure
-                if note_time  >= current_time {
-                    // println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
-                    if note_time == current_time {
-                        println!("NOTE TIME: {} --- CURRENT TIME: {}", note_time, current_time);
-                        println!("MEASURE {measure_count}: {:?}", current_measure);
+                // Calculate number of beats between notes --> adjust constant factor to account for rounding errors
+                let mut dist = ((note_time - prev_time + 3.0)/beat_length).floor();
+                while dist > 1.0 {
+                    if beat_count == beat_division {
+                        file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                        beat_count = 0;
                     }
-                    // Collect the shortest note value in the current measure 
-                    // -> Ensures we print the correct number of note rows for measure in .ssc file
-                    let max_value = current_measure
-                        .iter()
-                        .max_by_key(|&(_, value)| value)
-                        .map(|&(_, value)| value)
-                        .unwrap_or(0);
-                    // println!("WRITING...");
-                    // println!("current_measure: {:?}", current_measure);
-                    // println!("max_value: {}", max_value);
-                    if current_measure.len() == 15 {
-                        println!("15 MEASURE {measure_count}: {:?}", current_measure);
-                    }
-
-                    // beat_count = length of a beat in the measure (based on shortest note value)
-                    let beat_count = measure_length / max_value as f32;
-                    // println!("BEAT COUNT: {}", beat_count);
-                    let mut found_tuples: Vec<(f32, i32)> = vec![];
-                    
-                    // For a given measure, write a note to the file if one exists, empty line otherwise
-                    for i in 0..max_value {
-                        let mut found_note = false;
-                        for (note, _value) in current_measure.iter() {
-                            // Check if note was already found in the measure
-                            if found_tuples.iter().any(|&(n, _)| n == *note) {
-                                continue;
-                            }
-                            if *note/beat_count - (i as f32) < 1.0 { // Can adjust this value to allow for more leniency in note timing conversion
-                                // println!("FOUND: {}", i);
-                                // println!("NOTE: {}", note);
-                                found_note = true;
-                                file.write_all("1000\n".as_bytes()).expect("Unable to write data");
-                                found_tuples.push((*note, *_value));
-                                // print!("1");
-                            }
-                        }
-                        if !found_note {
-                            // println!("i: {} --- Measure: {:?}", i, current_measure);
-                            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
-                            // print!("0");
-                        }
-                        // println!("\nloop");
-                    }
-                    // println!("\nFound Tuples: {:?}", found_tuples);
-                    file.write(format!(", // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
-                    measure_count += 1;
-                    // Flush current measure buffer
-                    current_measure.clear();
-
-                    // Write empty measures if needed
-                    let mut empty_count = ((note_time - current_time)/measure_length).trunc() as i32 - 1; // -1 to account for the measure already written -> TBH not sure why it works, but it does
-                    // println!("EMPTY COUNT: {}", empty_count);
-                    while empty_count > 0 {
-                        file.write(format!("0000\n0000\n0000\n0000\n, // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
-                        measure_count += 1;
-                        empty_count -= 1;
-                        current_time += measure_length;
-                    }
-                    current_time += measure_length;
-                }
-
-                // TODO: Add support for additional note types/timings
-                // TODO: Add check for hold notes
-                // If in same measure, write note to current_measure buffer
-                // let beat = note_time - first_note_time;
-                // println!("BEAT: {}", beat);
-                if (note_time-prev_time)%quarter_note_duration < 2.0 || (note_time-prev_time)%quarter_note_duration > quarter_note_duration-2.0 {
-                    // println!("QUARTER");
-                    current_measure.push(((note_time-first_note_time)%measure_length, 4));
-                }
-                else if (note_time-prev_time)%eighth_note_duration < 2.0 || (note_time-prev_time)%eighth_note_duration > eighth_note_duration-2.0 {
-                    // println!("EIGHTH");
-                    current_measure.push(((note_time-first_note_time)%measure_length, 8));
-                }
-                else if (note_time-prev_time)%sixteenth_note_duration < 2.0 || (note_time-prev_time)%sixteenth_note_duration > sixteenth_note_duration-2.0 {
-                    // println!("SIXTEENTH");
-                    current_measure.push(((note_time-first_note_time)%measure_length, 16));
-                }
-                else {
-                    // println!("INITIAL");
-                    current_measure.push(((note_time-first_note_time)%measure_length, 4));
-                }
-            }
-
-            // Write the last measure
-            let max_value = current_measure
-                .iter()
-                .max_by_key(|&(_, value)| value)
-                .map(|&(_, value)| value)
-                .unwrap_or(0);
-            let beat_count = measure_length / max_value as f32;
-            let mut found_tuples: Vec<(f32, i32)> = vec![];
-            for i in 0..max_value {
-                let mut found_note = false;
-                for (note, _value) in current_measure.iter() {
-                    if found_tuples.iter().any(|&(n, _)| n == *note) {
-                        continue;
-                    }
-                    if *note/beat_count - (i as f32) < 1.0 {
-                        found_note = true;
-                        file.write_all("1000\n".as_bytes()).expect("Unable to write data");
-                        found_tuples.push((*note, *_value));
-                    }
-                }
-                if !found_note {
                     file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                    beat_count += 1;
+                    dist -= 1.0;
                 }
+                if beat_count == beat_division {
+                    file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                    beat_count = 0;
+                }
+                file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                beat_count += 1;
             }
-            file.write(format!(", // measure {measure_count}\n").as_bytes()).expect("Unable to write data");
-
+        
+            // Complete last measure
+            while beat_count < beat_division {
+                file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                beat_count += 1;
+            }
+            file.write_all(";\n".as_bytes()).expect("Unable to write data");
         }
-
+        
         Ok(())
     }
 
@@ -535,19 +429,14 @@ impl OsuParser {
         bpm
     }
 
-    // Calculate quarter note duration
-    fn calc_qn_duration(&self, bpm: f32) -> f32 {
-        60000.0 / bpm
-    }
-
     // Determine how many lines to print per measure
-    fn _get_min_beat_division(&self, bpm: f32) -> i32 {
+    fn get_min_beat_division(&self, bpm: f32) -> i32 {
         if let OsuHeader::HitObjects(hit_objects) = &self.hit_objects {
             let mut note_time = hit_objects
                 .first()
                 .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
                 .unwrap_or(0.0);
-            let qn_duration = self.calc_qn_duration(bpm);
+            let qn_duration = calc_qn_duration(bpm);
             let mut note_types: Vec<i32> = Vec::new();
 
             for i in hit_objects {
@@ -586,7 +475,6 @@ impl OsuParser {
                 let curr_note = note_types.pop().unwrap();
                 lcm = lcm.lcm(&curr_note);
             }
-            println!("LCM: {}", lcm);
             return lcm;
         }
         -1
@@ -601,14 +489,14 @@ mod tests {
     fn test_get_min_beat_division() {
         let parser = OsuParser::new("assets/REASON/reason_reduced.osu".to_string());
         let bpm = 184.0;
-        let result = parser._get_min_beat_division(bpm);
+        let result = parser.get_min_beat_division(bpm);
         println!("RESULT: {}", result);
         assert_eq!(result, 16); // Replace with the expected value
         
         // 12th notes case
         let parser2 = OsuParser::new("assets/yomiyori_real/yomiyori.osu".to_string());
         let bpm2 = 220.0;
-        let result2 = parser2._get_min_beat_division(bpm2);
+        let result2 = parser2.get_min_beat_division(bpm2);
         println!("RESULT: {}", result2);
         assert_eq!(result2, 48); // Replace with the expected value
     }
