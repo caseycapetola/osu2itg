@@ -2,7 +2,7 @@
 use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
-use crate::osu_util::{Delimiter, calc_qn_duration};
+use crate::osu_util::{Delimiter, calc_qn_duration, next_step};
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -349,6 +349,10 @@ impl OsuParser {
             // Track location in measure
             let mut beat_count = 0;
 
+            // Track step location/cadence
+            let mut foot: i8 = 0; // 0 = left, 1 = right
+            let mut prev_step = "1000".to_string();
+
             for hit_object in hit_objects.iter() {
                 // Break apart HitObject and collect the note time
                 let parts: Vec<&str> = hit_object.split(',').collect();
@@ -358,6 +362,7 @@ impl OsuParser {
                 // Edge Case: First note
                 if prev_time == 0.0 {
                     file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                    foot = foot^1;
                     beat_count += 1;
                     continue;
                 }
@@ -377,7 +382,10 @@ impl OsuParser {
                     file.write_all(",\n".as_bytes()).expect("Unable to write data");
                     beat_count = 0;
                 }
-                file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                prev_step = next_step(prev_step, foot);
+                file.write_all(prev_step.as_bytes()).expect("Unable to write data");
+                file.write_all("\n".as_bytes()).expect("Unable to write data");
+                foot = foot^1;
                 beat_count += 1;
             }
         
