@@ -352,16 +352,31 @@ impl OsuParser {
             // Track step location/cadence
             let mut foot: i8 = 0; // 0 = left, 1 = right
             let mut prev_step = "1000".to_string();
+            let mut prev_note_type = 0b1;
 
             for hit_object in hit_objects.iter() {
                 // Break apart HitObject and collect the note time
                 let parts: Vec<&str> = hit_object.split(',').collect();
+                let note_type = parts[3].parse::<i32>().unwrap();
+
+                // Skip spinners (for now)
+                if note_type & 0b1000 == 0b1000 {
+                    continue;
+                }
+
+                
                 prev_time = note_time;
                 note_time = parts[2].parse::<f32>().unwrap();
 
                 // Edge Case: First note
                 if prev_time == 0.0 {
-                    file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                    if note_type & 0b10 == 0b10 {
+                        file.write_all("2000\n".as_bytes()).expect("Unable to write data");
+                    }
+                    else {
+                        file.write_all("1000\n".as_bytes()).expect("Unable to write data");
+                    }
+                    prev_note_type = note_type;
                     foot = foot^1;
                     beat_count += 1;
                     continue;
@@ -382,9 +397,10 @@ impl OsuParser {
                     file.write_all(",\n".as_bytes()).expect("Unable to write data");
                     beat_count = 0;
                 }
-                prev_step = next_step(prev_step, foot);
+                prev_step = next_step(prev_step, foot, prev_note_type, note_type);
                 file.write_all(prev_step.as_bytes()).expect("Unable to write data");
                 file.write_all("\n".as_bytes()).expect("Unable to write data");
+                prev_note_type = note_type;
                 foot = foot^1;
                 beat_count += 1;
             }

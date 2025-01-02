@@ -7,82 +7,258 @@ pub fn calc_qn_duration(bpm: f32) -> f32 {
 
 // TODO: Add flag to toggle on footswitches/crossovers
 // Determine next step location -> 0 = left, 1 = right
-pub fn next_step(prev: String, new_foot: i8) -> String {
-    match prev.as_str() {
-        "1000" => {
-            if new_foot == 1 {
-                let num = rand::thread_rng().gen_range(0..3);
-                if num == 0 {
-                    return "0100".to_string();
-                }
-                else if num == 1 {
+pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32) -> String {
+    if prev_note_type & 0b1 == 0b1 {
+        match prev.as_str() {
+            "1000" | "1300" | "1030" | "1003" => {
+                if new_foot == 1 {
+                    let num = rand::thread_rng().gen_range(0..3);
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0200".to_string();
+                        }
+                        return "0100".to_string();
+                    }
+                    else if num == 1 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0020".to_string();
+                        }
+                        return "0010".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "0002".to_string();
+                        }
+                        return "0001".to_string();
+                    }
+                } else {
+                    if note_type & 0b10 == 0b10 {
+                        return "0020".to_string();
+                    }
                     return "0010".to_string();
                 }
-                else {
-                    return "0001".to_string();
-                }
-            } else {
-                return "0010".to_string();
-            }
-        },
-        "0001" => {
-            if new_foot == 1 {
-                let num = rand::thread_rng().gen_range(0..3);
-                if num == 0 {
-                    return "0100".to_string();
-                }
-                else if num == 1 {
+            },
+            "0001" | "3001" | "0301" | "0031" => {
+                if new_foot == 1 {
+                    let num = rand::thread_rng().gen_range(0..3);
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0200".to_string();
+                        }
+                        return "0100".to_string();
+                    }
+                    else if num == 1 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0020".to_string();
+                        }
+                        return "0010".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2000".to_string();
+                        }
+                        return "1000".to_string();
+                    }
+                } else {
+                    if note_type & 0b10 == 0b10 {
+                        return "0020".to_string();
+                    }
                     return "0010".to_string();
                 }
-                else {
-                    return "1000".to_string();
-                }
-            } else {
-                return "0010".to_string();
-            }
-        },
-        "0100" => {
-            let num = rand::thread_rng().gen_range(0..2);
-            if new_foot == 1 {
-                if num == 0 {
-                    return "0010".to_string();
-                }
-                else {
-                    return "0001".to_string();
-                }
-            }
-            else {
-                if num == 0 {
-                    return "0010".to_string();
+            },
+            "0100" | "3100" | "0130" | "0103" => {
+                let num = rand::thread_rng().gen_range(0..2);
+                if new_foot == 1 {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0020".to_string();
+                        }
+                        return "0010".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "0002".to_string();
+                        }
+                        return "0001".to_string();
+                    }
                 }
                 else {
-                    return "1000".to_string();
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0020".to_string();
+                        }
+                        return "0010".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2000".to_string();
+                        }
+                        return "1000".to_string();
+                    }
                 }
-            }
-        },
-        "0010" => {
-            let num = rand::thread_rng().gen_range(0..2);
-            if new_foot == 1 {
-                if num == 0 {
-                    return "0100".to_string();
+            },
+            "0010" | "3010" | "0310" | "0013" => {
+                let num = rand::thread_rng().gen_range(0..2);
+                if new_foot == 1 {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0200".to_string();
+                        }
+                        return "0100".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "0002".to_string();
+                        }
+                        return "0001".to_string();
+                    }
                 }
                 else {
-                    return "0001".to_string();
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0200".to_string();
+                        }
+                        return "0100".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2000".to_string();
+                        }
+                        return "1000".to_string();
+                    }
                 }
+            },
+            _ => {
+                return "1111".to_string();
             }
-            else {
-                if num == 0 {
-                    return "0100".to_string();
-                }
-                else {
-                    return "1000".to_string();
-                }
-            }
-        },
-        _ => {
-            return "1111".to_string();
         }
     }
+    else {
+        match prev.as_str() {
+            "2000" | "2300" | "2030" | "2003" => {
+                if new_foot == 1 {
+                    let num = rand::thread_rng().gen_range(0..3);
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "3200".to_string();
+                        }
+                        return "3100".to_string();
+                    }
+                    else if num == 1 {
+                        if note_type & 0b10 == 0b10 {
+                            return "3020".to_string();
+                        }
+                        return "3010".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "3002".to_string();
+                        }
+                        return "3001".to_string();
+                    }
+                } else {
+                    if note_type & 0b10 == 0b10 {
+                        return "3020".to_string();
+                    }
+                    return "3010".to_string();
+                }
+            },
+            "0002" | "3002" | "0302" | "0032" => {
+                if new_foot == 1 {
+                    let num = rand::thread_rng().gen_range(0..3);
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0203".to_string();
+                        }
+                        return "0103".to_string();
+                    }
+                    else if num == 1 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0023".to_string();
+                        }
+                        return "0013".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2003".to_string();
+                        }
+                        return "1003".to_string();
+                    }
+                } else {
+                    if note_type & 0b10 == 0b10 {
+                        return "0023".to_string();
+                    }
+                    return "0013".to_string();
+                }
+            },
+            "0200" | "3200" | "0230" | "0203" => {
+                let num = rand::thread_rng().gen_range(0..2);
+                if new_foot == 1 {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0320".to_string();
+                        }
+                        return "0310".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "0302".to_string();
+                        }
+                        return "0301".to_string();
+                    }
+                }
+                else {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0320".to_string();
+                        }
+                        return "0310".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2300".to_string();
+                        }
+                        return "1300".to_string();
+                    }
+                }
+            },
+            "0020" | "3020" | "0320" | "0023" => {
+                let num = rand::thread_rng().gen_range(0..2);
+                if new_foot == 1 {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0230".to_string();
+                        }
+                        return "0130".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "0032".to_string();
+                        }
+                        return "0031".to_string();
+                    }
+                }
+                else {
+                    if num == 0 {
+                        if note_type & 0b10 == 0b10 {
+                            return "0230".to_string();
+                        }
+                        return "0130".to_string();
+                    }
+                    else {
+                        if note_type & 0b10 == 0b10 {
+                            return "2030".to_string();
+                        }
+                        return "1030".to_string();
+                    }
+                }
+            },
+            _ => {
+                return "1111".to_string();
+            }
+        }
+    }
+    
 }
 
 
