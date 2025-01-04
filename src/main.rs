@@ -8,8 +8,8 @@ use std::env;
 
 fn main() {
     env::set_var("RUST_BACKTRACE", "1");
-    let mut parser = OsuParser::new("assets/yomiyori_real/yomiyori.osu".to_string());
+    let mut parser = OsuParser::new("assets/kirakira/kirakira.osu".to_string());
     let file_data = parser.parse_file();
 
-    parser.write_chart(&file_data, "E:\\Projects\\osu2itg\\yomiyori.ssc");
+    parser.write_chart(&file_data, "E:\\Projects\\osu2itg\\kirakira.ssc");
 }

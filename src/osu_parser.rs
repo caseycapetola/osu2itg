@@ -10,7 +10,7 @@ pub enum OsuHeader {
     General(Vec<String>),
     // Editor(Vec<String>),
     Metadata(Vec<String>),
-    // Difficulty(Vec<String>),
+    Difficulty(Vec<String>),
     // Events(Vec<String>),
     // TimingPoints(Vec<String>),
     // Colours(Vec<String>),
@@ -22,7 +22,7 @@ pub struct OsuParser {
     general: OsuHeader,
     // editor: OsuHeader,
     metadata: OsuHeader,
-    // difficulty: OsuHeader,
+    difficulty: OsuHeader,
     // events: OsuHeader,
     // timing_points: OsuHeader,
     // colours: OsuHeader,
@@ -30,14 +30,15 @@ pub struct OsuParser {
 }
 
 // TODO: Remove function when all headers are implemented
-fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
+fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
     let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
-    let mut headers: [OsuHeader; 3] = [
+    let mut headers: [OsuHeader; 4] = [
         OsuHeader::General(vec![]),
         OsuHeader::Metadata(vec![]),
+        OsuHeader::Difficulty(vec![]),
         OsuHeader::HitObjects(vec![]),
     ];
     let mut iter = collect.iter();
@@ -53,8 +54,11 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
                 "[Metadata]" => {
                     headers[1] = OsuHeader::Metadata(attributes.clone());
                 }, 
+                "[Difficulty]" => {
+                    headers[2] = OsuHeader::Difficulty(attributes.clone());
+                },
                 "[HitObjects]" => {
-                    headers[2] = OsuHeader::HitObjects(attributes.clone());
+                    headers[3] = OsuHeader::HitObjects(attributes.clone());
                 },
                 _ => (),
             }
@@ -85,8 +89,11 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 3] {
             "[Metadata]" => {
                 headers[1] = OsuHeader::Metadata(attributes.clone());
             },
+            "[Difficulty]" => {
+                headers[2] = OsuHeader::Difficulty(attributes.clone());
+            },
             "[HitObjects]" => {
-                headers[2] = OsuHeader::HitObjects(attributes.clone());
+                headers[3] = OsuHeader::HitObjects(attributes.clone());
             },
             _ => (),
         }
@@ -184,7 +191,8 @@ impl OsuParser {
 
             general: headers[0].clone(),
             metadata: headers[1].clone(),
-            hit_objects: headers[2].clone(),
+            difficulty: headers[2].clone(),
+            hit_objects: headers[3].clone(),
         }
     }
 
@@ -333,6 +341,9 @@ impl OsuParser {
         file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
         file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
         
+        // Get slider multiplier
+        let _slider_multiplier = self.get_slider_multiplier();
+
         // Write one empty measure for buffer
         file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
         
@@ -357,6 +368,9 @@ impl OsuParser {
             for hit_object in hit_objects.iter() {
                 // Break apart HitObject and collect the note time
                 let parts: Vec<&str> = hit_object.split(',').collect();
+                if parts.len() < 4 {
+                    continue;
+                }
                 let note_type = parts[3].parse::<i32>().unwrap();
 
                 // Skip spinners (for now)
@@ -465,7 +479,10 @@ impl OsuParser {
 
             for i in hit_objects {
                 let prev_note_time = note_time;
-                note_time = i.split(',').nth(2).unwrap().parse::<f32>().unwrap();
+                note_time = i.split(',').nth(2).unwrap_or("-1").parse::<f32>().unwrap();
+                if note_time == -1.0 {
+                    continue;
+                }
                 if (note_time - prev_note_time + 2.0)%qn_duration < 4.0 {
                     note_types.push(4);
                 }
@@ -502,6 +519,22 @@ impl OsuParser {
             return lcm;
         }
         -1
+    }
+
+    fn get_slider_multiplier(&self) -> f32 {
+        if let OsuHeader::Difficulty(difficulty) = &self.difficulty {
+            for i in difficulty {
+                let parts: Vec<&str> = i.split(":").collect();
+                if parts.len() == 2 {
+                    let key = parts[0].trim();
+                    let value = parts[1].trim();
+                    if key == "SliderMultiplier" {
+                        return value.parse::<f32>().unwrap();
+                    }
+                }
+            }
+        }
+        1.0
     }
 }
 

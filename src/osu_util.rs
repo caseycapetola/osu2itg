@@ -261,24 +261,18 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
     
 }
 
+// Calculate how long (in ms) a given slider is
+pub fn _slider_length(length: f32, slider_multiplier: f32, slider_velocity_multiplier: f32, beat_length: f32) -> f32 {
+    let mut slider_length = length * slider_multiplier;
+    slider_length = slider_length * slider_velocity_multiplier;
+    slider_length = slider_length * beat_length;
+    return slider_length;
+}
 
 enum _OsuNoteType {
     Tap = 0b01,
     Hold = 0b10,
     Spinner = 0b100,
-}
-
-#[derive(Copy, Clone)]
-#[allow(dead_code)] // TODO: Remove when Enum is fully implemented
-enum NoteState {
-    // Quarter(i8), TODO: --> Do I need to represent quarter notes? I think it is a dead state in DFA.
-    Eighth,
-    Twelfth,
-    Sixteenth,
-    TwentyFourth,
-    ThirtySecond,
-    FourtyEighth,
-    SixtyFourth,
 }
 
 pub struct Delimiter;
