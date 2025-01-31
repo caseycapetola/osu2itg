@@ -1,5 +1,5 @@
 // osu!std file parser
-use std::{fs::File, io::{self, stdin, stdout, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
+use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 use crate::osu_util::{Delimiter, calc_qn_duration, next_step};
@@ -213,7 +213,7 @@ impl OsuParser {
     }
 
     // Write fields to chart file
-    pub fn write_chart(&mut self, osu_data: &Vec<String>, file: &str) {
+    pub fn write_chart(&mut self, osu_data: &Vec<String>, file: &str, offset: f32) {
         // verify file is osu!std file
         let general_data = match &self.general {
             OsuHeader::General(data) => data,
@@ -239,7 +239,7 @@ impl OsuParser {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
-        let _offset = self.write_offset(&mut file);
+        let _offset = self.write_offset(&mut file, offset);
 
         let bpm = self.calc_bpm(osu_data);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
@@ -317,23 +317,10 @@ impl OsuParser {
 
 
     // Write offset to chart file
-    fn write_offset(&self, file: &mut File) -> f32 {
-        let mut offset = String::new();
-        print!("Enter offset: ");
-        let _ = stdout().flush();
-        stdin().read_line(&mut offset).expect("Unable to read line");
+    fn write_offset(&self, file: &mut File, offset: f32) -> f32 {
+        file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
 
-        let trimmed_offset = offset.trim();
-
-        file.write(format!("#OFFSET:{};\n", trimmed_offset).as_bytes()).expect("Unable to write data");
-
-        match trimmed_offset.parse::<f32>() {
-            Ok(value) => value,
-            Err(e) => {
-                eprintln!("Unable to parse offset: {:?}", e);
-                0.0 // Return a default value or handle the error as needed
-            }
-        }
+        offset
     }
 
     // Updated write steps function
