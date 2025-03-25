@@ -8,38 +8,43 @@ use crate::osu_util::{Delimiter, calc_qn_duration, next_step};
 #[derive(Debug)]
 pub enum OsuHeader {
     General(Vec<String>),
-    // Editor(Vec<String>),
+    Editor(Vec<String>),
     Metadata(Vec<String>),
     Difficulty(Vec<String>),
-    // Events(Vec<String>),
-    // TimingPoints(Vec<String>),
-    // Colours(Vec<String>),
+    Events(Vec<String>),
+    TimingPoints(Vec<String>),
+    Colours(Vec<String>),
     HitObjects(Vec<String>),
 }
 
 pub struct OsuParser {
     file: String,
     general: OsuHeader,
-    // editor: OsuHeader,
+    _editor: OsuHeader,
     metadata: OsuHeader,
     difficulty: OsuHeader,
-    // events: OsuHeader,
-    // timing_points: OsuHeader,
-    // colours: OsuHeader,
+    _events: OsuHeader,
+    _timing_points: OsuHeader,
+    _colours: OsuHeader,
     pub hit_objects: OsuHeader,
 }
 
-// TODO: Remove function when all headers are implemented
-fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
+
+// Parse osu! file headers
+fn parse_headers(file: String) -> [OsuHeader; 8] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
     let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
-    let mut headers: [OsuHeader; 4] = [
+    let mut headers: [OsuHeader; 8] = [
         OsuHeader::General(vec![]),
+        OsuHeader::Editor(vec![]),
         OsuHeader::Metadata(vec![]),
         OsuHeader::Difficulty(vec![]),
-        OsuHeader::HitObjects(vec![]),
+        OsuHeader::Events(vec![]),
+        OsuHeader::TimingPoints(vec![]),
+        OsuHeader::Colours(vec![]),
+        OsuHeader::HitObjects(vec![])
     ];
     let mut iter = collect.iter();
     let mut attributes: Vec<String> = vec![];
@@ -50,15 +55,28 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
             match header_type.as_str() {
                 "[General]" => {
                     headers[0] = OsuHeader::General(attributes.clone());
+                    
+                },
+                "[Editor]" => {
+                    headers[1] = OsuHeader::Editor(attributes.clone());
                 },
                 "[Metadata]" => {
-                    headers[1] = OsuHeader::Metadata(attributes.clone());
-                }, 
+                    headers[2] = OsuHeader::Metadata(attributes.clone());
+                },
                 "[Difficulty]" => {
-                    headers[2] = OsuHeader::Difficulty(attributes.clone());
+                    headers[3] = OsuHeader::Difficulty(attributes.clone());
+                },
+                "[Events]" => {
+                    headers[4] = OsuHeader::Events(attributes.clone());
+                },
+                "[TimingPoints]" => {
+                    headers[5] = OsuHeader::TimingPoints(attributes.clone());
+                },
+                "[Colours]" => {
+                    headers[6] = OsuHeader::Colours(attributes.clone());
                 },
                 "[HitObjects]" => {
-                    headers[3] = OsuHeader::HitObjects(attributes.clone());
+                    headers[7] = OsuHeader::HitObjects(attributes.clone());
                 },
                 _ => (),
             }
@@ -66,6 +84,7 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
         attr_index += 1;
         attributes.clear();
         header_type = "".to_string();
+        
 
         for i in line.split(Delimiter::WINDOWS) {
             if i.contains("osu file format") {
@@ -77,23 +96,36 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
                 continue;
             }
             attributes.push(i.to_string());
+            
         }
     }
 
-    // Ensure the last block of data is stored
     if !attributes.is_empty() {
         match header_type.as_str() {
             "[General]" => {
                 headers[0] = OsuHeader::General(attributes.clone());
+                
+            },
+            "[Editor]" => {
+                headers[1] = OsuHeader::Editor(attributes.clone());
             },
             "[Metadata]" => {
-                headers[1] = OsuHeader::Metadata(attributes.clone());
+                headers[2] = OsuHeader::Metadata(attributes.clone());
             },
             "[Difficulty]" => {
-                headers[2] = OsuHeader::Difficulty(attributes.clone());
+                headers[3] = OsuHeader::Difficulty(attributes.clone());
+            },
+            "[Events]" => {
+                headers[4] = OsuHeader::Events(attributes.clone());
+            },
+            "[TimingPoints]" => {
+                headers[5] = OsuHeader::TimingPoints(attributes.clone());
+            },
+            "[Colours]" => {
+                headers[6] = OsuHeader::Colours(attributes.clone());
             },
             "[HitObjects]" => {
-                headers[3] = OsuHeader::HitObjects(attributes.clone());
+                headers[7] = OsuHeader::HitObjects(attributes.clone());
             },
             _ => (),
         }
@@ -101,98 +133,24 @@ fn temp_parse_headers(file: String) -> [OsuHeader; 4] {
     headers
 }
 
-// Parse osu! file headers
-// fn parse_headers(file: String) -> [OsuHeader; 8] {
-//     let mut f = File::open(file.clone()).expect("Unable to open file");
-//     let mut data = String::new();
-//     f.read_to_string(&mut data).expect("Unable to read data");
-//     let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
-//     let mut headers: [OsuHeader; 8] = [
-//         OsuHeader::General(vec![]),
-//         OsuHeader::Editor(vec![]),
-//         OsuHeader::Metadata(vec![]),
-//         OsuHeader::Difficulty(vec![]),
-//         OsuHeader::Events(vec![]),
-//         OsuHeader::TimingPoints(vec![]),
-//         OsuHeader::Colours(vec![]),
-//         OsuHeader::HitObjects(vec![])
-//     ];
-//     let mut iter = collect.iter();
-//     let mut attributes: Vec<String> = vec![];
-//     let mut attr_index = 0;
-//     let mut header_type = "".to_string();
-//     while let Some(line) = iter.next() {
-//         println!("attributes: {:?}", attributes);
-//         if attr_index > 0 {
-//             match header_type.as_str() {
-//                 "[General]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::General(attributes.clone());
-                    
-//                 },
-//                 "[Editor]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::Editor(attributes.clone());
-//                 },
-//                 "[Metadata]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::Metadata(attributes.clone());
-//                 },
-//                 "[Difficulty]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::Difficulty(attributes.clone());
-//                 },
-//                 "[Events]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::Events(attributes.clone());
-//                 },
-//                 "[TimingPoints]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::TimingPoints(attributes.clone());
-//                 },
-//                 "[Colours]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::Colours(attributes.clone());
-//                 },
-//                 "[HitObjects]" => {
-//                     headers[attr_index-1 as usize] = OsuHeader::HitObjects(attributes.clone());
-//                 },
-//                 _ => (),
-//             }
-//         }
-//         attr_index += 1;
-//         attributes.clear();
-//         header_type = "".to_string();
-        
-
-//         for i in line.split(Delimiter::WINDOWS) {
-//             if i.contains("osu file format") {
-//                 attr_index = 0;
-//                 break;
-//             }
-//             if i.contains("[") {
-//                 header_type = i.to_string();
-//                 println!("HEADER TYPE: {}", header_type);
-//                 continue;
-//             }
-//             attributes.push(i.to_string());
-            
-//         }
-//     }
-//     headers
-// }
-
 impl OsuParser {
     pub fn new(file: String) -> Self {
-        let headers = temp_parse_headers(file.clone());
+        let headers = parse_headers(file.clone());
         return OsuParser {
             file,
-            // general: headers[0].clone(),
-            // editor: headers[1].clone(),
-            // metadata: headers[2].clone(),
-            // difficulty: headers[3].clone(),
-            // events: headers[4].clone(),
-            // timing_points: headers[5].clone(),
-            // colours: headers[6].clone(),
-            // hit_objects: headers[7].clone(),
-
             general: headers[0].clone(),
-            metadata: headers[1].clone(),
-            difficulty: headers[2].clone(),
-            hit_objects: headers[3].clone(),
+            _editor: headers[1].clone(),
+            metadata: headers[2].clone(),
+            difficulty: headers[3].clone(),
+            _events: headers[4].clone(),
+            _timing_points: headers[5].clone(),
+            _colours: headers[6].clone(),
+            hit_objects: headers[7].clone(),
+
+            // general: headers[0].clone(),
+            // metadata: headers[1].clone(),
+            // difficulty: headers[2].clone(),
+            // hit_objects: headers[3].clone(),
         }
     }
 
@@ -240,7 +198,6 @@ impl OsuParser {
         self.write_general(&mut file);
         self.write_metadata(&mut file);
         let _offset = self.write_offset(&mut file, offset);
-
         let bpm = self.calc_bpm(osu_data);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
         self.write_steps(&mut file, bpm).expect("Unable to write steps");
@@ -373,6 +330,7 @@ impl OsuParser {
                 if prev_time == 0.0 {
                     if note_type & 0b10 == 0b10 {
                         file.write_all("2000\n".as_bytes()).expect("Unable to write data");
+                        prev_step = "2000".to_string();
                     }
                     else {
                         file.write_all("1000\n".as_bytes()).expect("Unable to write data");

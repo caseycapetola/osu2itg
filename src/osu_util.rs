@@ -8,6 +8,7 @@ pub fn calc_qn_duration(bpm: f32) -> f32 {
 // TODO: Add flag to toggle on footswitches/crossovers
 // Determine next step location -> 0 = left, 1 = right
 pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32) -> String {
+    // CASE 1: Previous note was a tap note
     if prev_note_type & 0b1 == 0b1 {
         match prev.as_str() {
             "1000" | "1300" | "1030" | "1003" => {
@@ -133,6 +134,7 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
             }
         }
     }
+    // CASE 2: Previous note was a slider
     else {
         match prev.as_str() {
             "2000" | "2300" | "2030" | "2003" => {
