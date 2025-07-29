@@ -1,36 +1,71 @@
 use rand::Rng;
+use crate::constants::*;
 
 // Calculate quarter note duration
 pub fn calc_qn_duration(bpm: f32) -> f32 {
     60000.0 / bpm
 }
 
+enum OsuMode {
+    Standard,
+    _Taiko,
+    _Catch,
+    _Mania,
+}
+
+impl OsuMode {
+    pub fn val(&self) -> i32 {
+        match self {
+            OsuMode::Standard => 0,
+            OsuMode::_Taiko => 1,
+            OsuMode::_Catch => 2,
+            OsuMode::_Mania => 3,
+        }
+    }
+}
+
+// Checks if file is osu!std file
+pub fn check_std(data: &Vec<String>) -> (bool, &str) {
+    let mut iter = data.iter();
+    while let Some(line) = iter.next() {
+        if line.contains("Mode") {
+            // Check if mode is 0
+            let mode = line.split(":").collect::<Vec<&str>>()[1].trim().parse::<i32>().unwrap();
+            if mode == OsuMode::Standard.val() {
+                return (true, "");
+            }
+            return (false, "File passed is not osu!std file");
+        }
+    }
+    return (false, "Cannot determine if file is osu!std file");
+}
+
 // TODO: Add flag to toggle on footswitches/crossovers
 // Determine next step location -> 0 = left, 1 = right
 pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32) -> String {
     // CASE 1: Previous note was a tap note
-    if prev_note_type & 0b1 == 0b1 {
+    if prev_note_type & OsuNoteType::Tap.val() == OsuNoteType::Tap.val() {
         match prev.as_str() {
-            "1000" | "1300" | "1030" | "1003" => {
-                if new_foot == 1 {
+            SM5NoteType::LSTEP | SM5NoteType::LSTEP_DRELEASE | SM5NoteType::LSTEP_URELEASE | SM5NoteType::LSTEP_RRELEASE => {
+                if new_foot == Foot::RIGHT {
                     let num = rand::thread_rng().gen_range(0..3);
                     if num == 0 {
                         if note_type & 0b10 == 0b10 {
-                            return "0200".to_string();
+                            return SM5NoteType::DHOLD.to_string();
                         }
-                        return "0100".to_string();
+                        return SM5NoteType::DSTEP.to_string();
                     }
                     else if num == 1 {
                         if note_type & 0b10 == 0b10 {
-                            return "0020".to_string();
+                            return SM5NoteType::UHOLD.to_string();
                         }
-                        return "0010".to_string();
+                        return SM5NoteType::USTEP.to_string();
                     }
                     else {
                         if note_type & 0b10 == 0b10 {
-                            return "0002".to_string();
+                            return SM5NoteType::RHOLD.to_string();
                         }
-                        return "0001".to_string();
+                        return SM5NoteType::RSTEP.to_string();
                     }
                 } else {
                     if note_type & 0b10 == 0b10 {
@@ -40,7 +75,7 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
                 }
             },
             "0001" | "3001" | "0301" | "0031" => {
-                if new_foot == 1 {
+                if new_foot == Foot::LEFT {
                     let num = rand::thread_rng().gen_range(0..3);
                     if num == 0 {
                         if note_type & 0b10 == 0b10 {
@@ -61,6 +96,13 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
                         return "1000".to_string();
                     }
                 } else {
+                    let num = rand::thread_rng().gen_range(0..2);
+                    if num == 0{
+                        if note_type & 0b10 == 0b10 {
+                            return "0200".to_string();
+                        }
+                        return "0100".to_string();
+                    }
                     if note_type & 0b10 == 0b10 {
                         return "0020".to_string();
                     }
@@ -271,11 +313,6 @@ pub fn _slider_length(length: f32, slider_multiplier: f32, slider_velocity_multi
     return slider_length;
 }
 
-enum _OsuNoteType {
-    Tap = 0b01,
-    Hold = 0b10,
-    Spinner = 0b100,
-}
 
 pub struct Delimiter;
 

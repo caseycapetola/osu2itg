@@ -2,7 +2,8 @@
 use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
-use crate::osu_util::{Delimiter, calc_qn_duration, next_step};
+use crate::osu_util::{Delimiter, calc_qn_duration, check_std, next_step};
+use crate::constants::{Foot};
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -146,11 +147,6 @@ impl OsuParser {
             _timing_points: headers[5].clone(),
             _colours: headers[6].clone(),
             hit_objects: headers[7].clone(),
-
-            // general: headers[0].clone(),
-            // metadata: headers[1].clone(),
-            // difficulty: headers[2].clone(),
-            // hit_objects: headers[3].clone(),
         }
     }
 
@@ -177,13 +173,11 @@ impl OsuParser {
             OsuHeader::General(data) => data,
             _ => panic!("Invalid header type"),
         };
-        let file_check = self.check_std(general_data);
-        match file_check.0 {
-            false => panic!("Could not configure ITG file: {}", file_check.1),
+        let (successful, error_msg) = check_std(general_data);
+        match successful {
+            false => panic!("Could not configure ITG file: {}", error_msg),
             true => (),
         }
-        
-        // const OSU_FIELDS: [&str; 3] = ["Title", "AudioFilename", "PreviewTime"];
 
         // let mut file = File::create(file).expect("Unable to create file");
         let binding = file.to_string();
@@ -197,7 +191,7 @@ impl OsuParser {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
-        let _offset = self.write_offset(&mut file, offset);
+        self.write_offset(&mut file, offset);
         let bpm = self.calc_bpm(osu_data);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
         self.write_steps(&mut file, bpm).expect("Unable to write steps");
@@ -272,12 +266,8 @@ impl OsuParser {
         }
     } 
 
-
-    // Write offset to chart file
-    fn write_offset(&self, file: &mut File, offset: f32) -> f32 {
+    fn write_offset(&self, file: &mut File, offset: f32) {
         file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
-
-        offset
     }
 
     // Updated write steps function
@@ -305,7 +295,7 @@ impl OsuParser {
             let mut beat_count = 0;
 
             // Track step location/cadence
-            let mut foot: i8 = 0; // 0 = left, 1 = right
+            let mut foot: Foot = Foot::new(Foot::LEFT);
             let mut prev_step = "1000".to_string();
             let mut prev_note_type = 0b1;
 
@@ -336,7 +326,7 @@ impl OsuParser {
                         file.write_all("1000\n".as_bytes()).expect("Unable to write data");
                     }
                     prev_note_type = note_type;
-                    foot = foot^1;
+                    foot.switch_foot();
                     beat_count += 1;
                     continue;
                 }
@@ -356,11 +346,11 @@ impl OsuParser {
                     file.write_all(",\n".as_bytes()).expect("Unable to write data");
                     beat_count = 0;
                 }
-                prev_step = next_step(prev_step, foot, prev_note_type, note_type);
+                prev_step = next_step(prev_step, foot.state, prev_note_type, note_type);
                 file.write_all(prev_step.as_bytes()).expect("Unable to write data");
                 file.write_all("\n".as_bytes()).expect("Unable to write data");
                 prev_note_type = note_type;
-                foot = foot^1;
+                foot.switch_foot();
                 beat_count += 1;
             }
         
@@ -375,21 +365,6 @@ impl OsuParser {
         Ok(())
     }
 
-    // Checks if file is osu!std file
-    fn check_std(&self, data: &Vec<String>) -> (bool, &str) {
-        let mut iter = data.iter();
-        while let Some(line) = iter.next() {
-            if line.contains("Mode") {
-                // Check if mode is 0
-                let mode = line.split(":").collect::<Vec<&str>>()[1].trim();
-                if mode == "0" {
-                    return (true, "");
-                }
-                return (false, "File passed is not osu!std file");
-            }
-        }
-        return (false, "Cannot determine if file is osu!std file");
-    }
 
     // Calculate BPM from osu Timing Points
     fn calc_bpm(&self, data: &Vec<String>) -> f32 {

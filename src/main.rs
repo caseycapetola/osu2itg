@@ -1,6 +1,7 @@
 mod osu_parser;
 mod osu_util;
 mod file_tools;
+mod constants;
 
 use eframe::egui;
 use rfd::FileDialog;
