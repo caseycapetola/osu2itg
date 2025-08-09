@@ -493,6 +493,86 @@ impl OsuParser {
         }
         1.0
     }
+
+    fn prepare_chart(&self, timing_points: &Vec<String>, hit_objects: &Vec<String>) {
+        if timing_points.is_empty() || hit_objects.is_empty() {
+            return;
+        }
+
+        let mut t: usize = 0;
+        let mut h: usize = 0;
+        // Pop first timing point and hit object
+        let mut current_timing_point: &String;
+        let mut current_hit_object: &String;
+
+        let mut chart_data: Vec<String> = vec![];
+        let mut bpm_changes: Vec<(f32, f32)> = vec![];
+        let mut temp_bpm_changes: Vec<(f32, f32)> = vec![];
+        let mut hit_objects: Vec<&String> = vec![];
+        let mut prev_bpm: f32 = 0.0;
+        let mut prev_time: f32 = 0.0;
+        let mut prev_timing_point_time: f32 = 0.0;
+        let mut prev_hit_object_time: f32 = 0.0;
+        let mut foot: Foot = Foot::new(Foot::LEFT);
+        let mut prev_step = "1000".to_string();
+        let mut prev_note_type = 0b1;
+
+        // Hardcoded to account for worst case
+        let beat_division = 192;
+
+
+        while t < timing_points.len() && h < hit_objects.len() {
+            current_timing_point = &timing_points[t];
+            current_hit_object = &hit_objects[h];
+            
+            // Get timing point time
+            let timing_point_time = current_timing_point.split(',').nth(0).unwrap().parse::<f32>().unwrap();
+            let uninherited = current_timing_point.split(',').nth(6).unwrap().parse::<i32>().unwrap();
+            let hit_object_time = current_hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap();
+            let note_type = current_hit_object.split(',').nth(3).unwrap().parse::<i32>().unwrap();
+
+            // Skip timing points that are not uninherited
+            if uninherited == 0 {
+                t += 1;
+                continue;
+            }
+
+            // Skip spinners
+            if note_type & 0b1000 == 0b1000 {
+                h += 1;
+                continue;
+            }
+            
+            let bpm = 60000.0 / current_timing_point.split(',').nth(TimingPointFields::BEAT_LENGTH).unwrap().parse::<f32>().unwrap();
+            
+            if timing_point_time <= hit_object_time {
+                if hit_objects.is_empty() {
+                    bpm_changes.push((0.0, bpm));
+                    prev_timing_point_time = timing_point_time;
+                    prev_hit_object_time = timing_point_time;
+                    prev_bpm = bpm;
+                }
+                else {
+                    let beat_count = ((timing_point_time - prev_timing_point_time) as f32 / calc_qn_duration(prev_bpm) * 1000.0).round() / 1000.0;
+                    bpm_changes.push((beat_count, bpm));
+                    temp_bpm_changes.push((beat_count, bpm));
+                    prev_timing_point_time = timing_point_time;
+                }
+            }
+            else {
+                // CASE 1: No BPM change
+                if temp_bpm_changes.is_empty() {
+                    if chart_data.is_empty() {
+                        // 240,000/bpm = length of whole note/measure --> calculating distance in beats
+                        let mut dist = ((hit_object_time - prev_hit_object_time + 3.0)/(240_000.0/(prev_bpm * beat_division as f32))).floor();
+                        
+                        // Continue with write_steps implementation below
+                    }
+                }
+            }
+
+        }
+    }
 }
 
 #[cfg(test)]
