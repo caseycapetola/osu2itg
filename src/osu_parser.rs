@@ -3,7 +3,7 @@ use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, co
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
 use crate::osu_util::{Delimiter, calc_qn_duration, check_std, next_step};
-use crate::constants::{Foot};
+use crate::constants::{Foot, TimingPointFields};
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -25,7 +25,7 @@ pub struct OsuParser {
     metadata: OsuHeader,
     difficulty: OsuHeader,
     _events: OsuHeader,
-    _timing_points: OsuHeader,
+    timing_points: OsuHeader,
     _colours: OsuHeader,
     pub hit_objects: OsuHeader,
 }
@@ -144,7 +144,7 @@ impl OsuParser {
             metadata: headers[2].clone(),
             difficulty: headers[3].clone(),
             _events: headers[4].clone(),
-            _timing_points: headers[5].clone(),
+            timing_points: headers[5].clone(),
             _colours: headers[6].clone(),
             hit_objects: headers[7].clone(),
         }
@@ -193,6 +193,12 @@ impl OsuParser {
         self.write_metadata(&mut file);
         self.write_offset(&mut file, offset);
         let bpm = self.calc_bpm(osu_data);
+
+        let timing_points = match &self.timing_points {
+            OsuHeader::TimingPoints(data) => data,
+            _ => panic!("Invalid header type"),
+        };
+        let _bpms = self.get_bpms(&timing_points);
         file.write(format!("#BPMS:0.000={:.3};\n#DISPLAYBPM:{:.3};\n", bpm, bpm).as_bytes()).expect("Unable to write data");
         self.write_steps(&mut file, bpm).expect("Unable to write steps");
     }
@@ -378,7 +384,7 @@ impl OsuParser {
                         continue;
                     }
                     let timing_data = i.split(",").collect::<Vec<&str>>();
-                    if timing_data[6] == "1" {
+                    if timing_data[TimingPointFields::UNINHERITED] == "1" {
                         bpm = 60000.0 / timing_data[1].parse::<f32>().unwrap();
                     }
                 }
@@ -439,6 +445,37 @@ impl OsuParser {
             return lcm;
         }
         -1
+    }
+
+    fn get_bpms(&self, timing_points: &Vec<String>) -> Vec<(f32, f32)> {
+        let mut bpms: Vec<(f32, f32)> = vec![];
+        let mut prev_bpm = 0.0;
+        let mut prev_time: i32 = 0;
+        for i in timing_points.iter() {
+            let parts: Vec<&str> = i.split(",").collect();
+            if parts.len() < 2 {
+                continue;
+            }
+            if parts[TimingPointFields::UNINHERITED] == "1" {
+                // If bpms is empty, add the first bpm
+                if bpms.is_empty() {
+                    prev_bpm = (60000.0 / parts[TimingPointFields::BEAT_LENGTH].parse::<f32>().unwrap() * 1000.0).round() / 1000.0;
+                    bpms.push((0.0, prev_bpm));
+                    prev_time = parts[TimingPointFields::TIME].parse::<i32>().unwrap();
+                    println!("BPM: {}, Time: {}", prev_bpm, parts[TimingPointFields::TIME]);
+                    continue;
+                }
+                let bpm = (60000.0 / parts[TimingPointFields::BEAT_LENGTH].parse::<f32>().unwrap() * 1000.0).round() / 1000.0;
+                let time = parts[TimingPointFields::TIME].parse::<i32>().unwrap();
+                let beat_count = ((time - prev_time) as f32 / calc_qn_duration(prev_bpm) * 1000.0).round() / 1000.0;
+                bpms.push((beat_count, bpm));
+                println!("BPM: {}, Time: {}, Beat Count: {}", bpm, parts[TimingPointFields::TIME], beat_count);
+                prev_bpm = bpm;
+                prev_time = time;
+
+            }
+        }
+        bpms
     }
 
     fn get_slider_multiplier(&self) -> f32 {

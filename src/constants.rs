@@ -74,3 +74,15 @@ impl SM5NoteType {
   pub const RHOLD_URELEASE: &'static str = "0032";
   pub const QUADSTEP: &'static str = "1111";
 }
+
+pub struct TimingPointFields;
+impl TimingPointFields {
+    pub const TIME: usize = 0;
+    pub const BEAT_LENGTH: usize = 1;
+    pub const METER: usize = 2;
+    pub const SAMPLE_SET: usize = 3;
+    pub const SAMPLE_INDEX: usize = 4;
+    pub const VOLUME: usize = 5;
+    pub const UNINHERITED: usize = 6;
+    pub const EFFECTS: usize = 7;
+}
