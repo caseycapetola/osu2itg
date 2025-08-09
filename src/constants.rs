@@ -44,10 +44,10 @@ impl SM5NoteType {
   pub const DHOLD: &'static str = "0200";
   pub const UHOLD: &'static str = "0020";
   pub const RHOLD: &'static str = "0002";
-  pub const LRELEASE: &'static str = "3000";
-  pub const DRELEASE: &'static str = "0300";
-  pub const URELEASE: &'static str = "0030";
-  pub const RRELEASE: &'static str = "0003";
+  pub const _LRELEASE: &'static str = "3000";
+  pub const _DRELEASE: &'static str = "0300";
+  pub const _URELEASE: &'static str = "0030";
+  pub const _RRELEASE: &'static str = "0003";
   pub const LSTEP_DRELEASE: &'static str = "1300";
   pub const LSTEP_URELEASE: &'static str = "1030";
   pub const LSTEP_RRELEASE: &'static str = "1003";
@@ -72,4 +72,5 @@ impl SM5NoteType {
   pub const RHOLD_LRELEASE: &'static str = "3002";
   pub const RHOLD_DRELEASE: &'static str = "0302";
   pub const RHOLD_URELEASE: &'static str = "0032";
+  pub const QUADSTEP: &'static str = "1111";
 }
