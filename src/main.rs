@@ -1,3 +1,4 @@
+pub mod osu;
 mod osu_parser;
 mod osu_util;
 mod file_tools;
