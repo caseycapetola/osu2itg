@@ -2,8 +2,9 @@
 use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
 use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
-use crate::osu_util::{Delimiter, calc_qn_duration, check_std, next_step};
+use crate::osu_util::{calc_qn_duration, check_std, next_step};
 use crate::constants::{Foot, TimingPointFields};
+use regex::Regex;
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -36,7 +37,8 @@ fn parse_headers(file: String) -> [OsuHeader; 8] {
     let mut f = File::open(file.clone()).expect("Unable to open file");
     let mut data = String::new();
     f.read_to_string(&mut data).expect("Unable to read data");
-    let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
+    let re = Regex::new(r"(\r?\n){2,}").unwrap();
+    let collect = re.split(&data).map(|s| s.to_string()).collect::<Vec<String>>();
     let mut headers: [OsuHeader; 8] = [
         OsuHeader::General(vec![]),
         OsuHeader::Editor(vec![]),
@@ -87,7 +89,7 @@ fn parse_headers(file: String) -> [OsuHeader; 8] {
         header_type = "".to_string();
         
 
-        for i in line.split(Delimiter::WINDOWS) {
+        for i in line.lines() {
             if i.contains("osu file format") {
                 attr_index = 0;
                 break;
@@ -161,8 +163,10 @@ impl OsuParser {
     // Splits file by [Sections]
     pub fn parse_file(&mut self) -> Vec<String> {
         let data = self.read_file();
-        let collect = data.split(&(Delimiter::WINDOWS.to_string() + &Delimiter::WINDOWS.to_string())[..]).map(|s| s.to_string()).collect::<Vec<String>>();
-        return collect;
+        let re = Regex::new(r"(\r?\n){2,}").unwrap();
+        let sections: Vec<String> = re.split(&data).map(|s| s.to_string()).collect();
+        println!("Parsed {} sections from file", sections.len());
+        return sections;
 
     }
 
@@ -378,16 +382,15 @@ impl OsuParser {
         let mut bpm = 0.0;
         while let Some(line) = iter.next() {
             if line.contains("[TimingPoints]") {
-                let timing_info = line.split(Delimiter::WINDOWS).collect::<Vec<&str>>();
-                for i in timing_info.iter() {
-                    if i.contains("[") {
-                        continue;
-                    }
-                    let timing_data = i.split(",").collect::<Vec<&str>>();
-                    if timing_data[TimingPointFields::UNINHERITED] == "1" {
-                        bpm = 60000.0 / timing_data[1].parse::<f32>().unwrap();
-                    }
+                for timing_line in line.lines() {
+                if timing_line.contains("[") {
+                    continue;
                 }
+                let timing_data = timing_line.split(',').collect::<Vec<&str>>();
+                if timing_data[TimingPointFields::UNINHERITED] == "1" {
+                    bpm = 60000.0 / timing_data[TimingPointFields::BEAT_LENGTH].parse::<f32>().unwrap();
+                }
+            }
             }
         }
         bpm

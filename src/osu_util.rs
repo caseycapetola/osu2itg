@@ -314,13 +314,6 @@ pub fn _slider_length(length: f32, slider_multiplier: f32, slider_velocity_multi
 }
 
 
-pub struct Delimiter;
-
-impl Delimiter {
-    pub const _MAC: &'static str = "\n";
-    pub const WINDOWS: &'static str = "\r\n";
-}
-
 // Returns the type of note in ITG format
 fn _note_type_to_itg(note_type: i8) -> i8 {
     note_type & 0b11
