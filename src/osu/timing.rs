@@ -1,3 +1,5 @@
+use crate::constants::TimingPointFields;
+
 pub fn get_timing_point_vec_from_data(data: String) -> Vec<TimingPoint> {
     let mut timing_points = Vec::new();
     for line in data.lines() {
@@ -34,7 +36,7 @@ impl TimingPoint {
             sample_set: 1,
             sample_index: 0,
             volume: 100,
-            uninherited: true,
+            uninherited: false,
             effects: 0,
         }
     }
@@ -52,19 +54,19 @@ impl TimingPoint {
             println!("Invalid timing point line, skipping.");
             return timing_point;
         }
-        let key = parts[0].trim();
-        let value = parts[1].trim();
-        match key {
-            "Time" => timing_point.time = value.parse().unwrap_or(0),
-            "BeatLength" => timing_point.beat_length = value.parse().unwrap_or(500.0),
-            "Meter" => timing_point.meter = value.parse().unwrap_or(4),
-            "SampleSet" => timing_point.sample_set = value.parse().unwrap_or(1),
-            "SampleIndex" => timing_point.sample_index = value.parse().unwrap_or(0),
-            "Volume" => timing_point.volume = value.parse().unwrap_or(100),
-            "Uninherited" => timing_point.uninherited = value.parse().unwrap_or(1) != 0,
-            "Effects" => timing_point.effects = value.parse().unwrap_or(0),
-            _ => {}
-        }
+        
+        timing_point.time = parts[TimingPointFields::TIME].trim().parse().unwrap_or(0);
+        timing_point.beat_length = parts[TimingPointFields::BEAT_LENGTH].trim().parse().unwrap_or(500.0);
+        timing_point.meter = parts[TimingPointFields::METER].trim().parse().unwrap_or(4);
+        timing_point.sample_set = parts[TimingPointFields::SAMPLE_SET].trim().parse().unwrap_or(1);
+        timing_point.sample_index = parts[TimingPointFields::SAMPLE_INDEX].trim().parse().unwrap_or(0);
+        timing_point.volume = parts[TimingPointFields::VOLUME].trim().parse().unwrap_or(100);
+        timing_point.uninherited = match parts[TimingPointFields::UNINHERITED].trim().parse::<i32>() {
+            Ok(1) => true,
+            Ok(0) => false,
+            _ => false,
+        };
+        timing_point.effects = parts[TimingPointFields::EFFECTS].trim().parse().unwrap_or(0);
         
         return timing_point;
     }

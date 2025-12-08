@@ -64,6 +64,8 @@ impl eframe::App for MyApp {
                     let file_path = path.to_string_lossy().to_string();
                     let parser_v2 = OsuParserV2::new(file_path.clone(), parse_file(file_path.clone()));
                     parser_v2.test_init();
+                    let output_path = format!("test_v2.ssc");
+                    parser_v2.write_chart(&output_path, self.offset);
                     println!("Parsed with V2");
                 }
             }

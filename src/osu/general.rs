@@ -4,10 +4,10 @@ pub struct General {
     pub audio_lead_in: i32,
     pub audio_hash: String, // DEPRECATED
     pub preview_time: i32,
-    pub countdown: i8,
+    pub countdown: i32,
     pub sample_set: String,
     pub stack_leniency: f32,
-    pub mode: i8,
+    pub mode: i32,
     pub letterbox_in_breaks: bool,
     pub story_fire_in_front: bool, // DEPRECATED
     pub use_skin_sprites: bool,

@@ -1,8 +1,11 @@
+use core::error;
 // osu!std file parser
-use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
+use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; use native_windows_gui::stretch::result;
+//, collections::HashMap};
 use num::Integer;
-use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}};
-use crate::osu_util::{calc_qn_duration, check_std, next_step};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file}};
+use crate::osu_util::{calc_qn_duration, check_std, check_std_v2, next_step};
+use crate::utils::common::calc_bpm;
 use crate::constants::{Foot, OsuFields, TimingPointFields};
 use crate::osu;
 use regex::Regex;
@@ -610,11 +613,104 @@ impl OsuParserV2 {
     }
 
     pub fn test_init(&self) {
-        println!("GENERAL: {:?}", self.general);
-        println!("METADATA: {:?}", self.metadata);
-        println!("DIFFICULTY: {:?}", self.difficulty);
+        // println!("GENERAL: {:?}", self.general);
+        // println!("METADATA: {:?}", self.metadata);
+        // println!("DIFFICULTY: {:?}", self.difficulty);
         // println!("TIMING POINTS: {:?}", self.timing_points);
         // println!("HIT OBJECTS: {:?}", self.hit_objects);
+    }
+
+    pub fn write_chart(&self, output_path: &str, offset: f32) {
+        let (successful, error_msg) = check_std_v2(self.general.mode);
+        match successful {
+            false => panic!("Could not configure ITG file: {}", error_msg),
+            true => (),
+        }
+
+        let binding = output_path.to_string();
+        let path = Path::new(&binding);
+        let display = path.display();
+
+        let mut file = match File::create(&path) {
+            Err(why) => panic!("couldn't create {}: {}", display, why),
+            Ok(file) => file,
+        };
+
+        file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
+        self.write_general(&mut file);
+        self.write_metadata(&mut file);
+        file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
+        let bpms = self.write_bpms(&mut file);
+        
+
+
+    }
+
+    fn write_general(&self, file: &mut File) {
+        file.write(format!("#MUSIC:{};\n", self.general.audio_filename).as_bytes()).expect("Unable to write data");
+
+        // Convert preview time from milliseconds to seconds
+        let preview_start = (self.general.preview_time as f32) / 1000.0;
+        file.write(format!("#SAMPLESTART:{};\n", preview_start).as_bytes()).expect("Unable to write data");
+
+        file.write("#SAMPLELENGTH:20.000;\n".as_bytes()).expect("Unable to write data");
+    }
+
+    fn write_metadata(&self, file: &mut File) {
+        file.write(format!("#TITLE:{};\n", self.metadata.title_unicode).as_bytes()).expect("Unable to write data");
+        file.write(format!("#ARTIST:{};\n", self.metadata.artist_unicode).as_bytes()).expect("Unable to write data");
+        file.write(format!("#STEPSTITLE:{};\n", self.metadata.version).as_bytes()).expect("Unable to write data");
+    }
+
+    fn write_bpms(&self, file: &mut File) -> Vec<f32> {
+        let mut res: Vec<f32> = vec![];
+        
+        let mut bpm_string = String::from("#BPMS:");
+        let mut min_bpm = std::f32::MAX;
+        let mut max_bpm = std::f32::MIN;
+        for tp in self.timing_points.iter() {
+            if tp.uninherited == true {
+                let bpm = calc_bpm(tp.beat_length);
+                // let time_in_seconds = tp.time as f32 / 1000.0; // MAY USE THIS LATER, FOR NOW HARDCODE 0.000
+                bpm_string.push_str(&format!("0.000={:.3},", bpm));
+                res.push(bpm);
+                if bpm < min_bpm {
+                    min_bpm = bpm;
+                }
+                if bpm > max_bpm {
+                    max_bpm = bpm;
+                }
+            }
+        }
+        // Remove trailing comma and add semicolon
+        if bpm_string.ends_with(',') {
+            bpm_string.pop();
+        }
+        bpm_string.push(';');
+        file.write(bpm_string.as_bytes()).expect("Unable to write data");
+
+        // MAY NOT NEED TO WRITE DISPLAY BPM
+        if min_bpm == max_bpm {
+            file.write(format!("\n#DISPLAYBPM:{:.3};\n", min_bpm).as_bytes()).expect("Unable to write data");
+        } else {
+            file.write(format!("\n#DISPLAYBPM:{:.3}:{:.3};\n", min_bpm, max_bpm).as_bytes()).expect("Unable to write data");
+        }
+
+        res
+    }
+
+    fn write_steps(&self, file: &mut File, bpm: f32) -> io::Result<()> {
+        // Write standard header
+        file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
+        file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
+
+        // Write one empty measure for buffer
+        file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+
+        let beat_division = get_min_beat_division(&self.hit_objects, bpm);
+
+
+        Ok(())
     }
 
 }
