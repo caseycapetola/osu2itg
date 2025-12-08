@@ -1,24 +1,16 @@
-pub enum OsuNoteType {
-    Tap,
-    Hold,
-    Spinner,
-}
-
-impl OsuNoteType {
-    pub fn val(&self) -> i32 {
-        match self {
-            OsuNoteType::Tap => 0b1,
-            OsuNoteType::Hold => 0b10,
-            OsuNoteType::Spinner => 0b1000,
-        }
-    }
-}
-
 pub struct OsuNoteTypeV2;
 impl OsuNoteTypeV2 {
     pub const TAP: i32 = 0b1;
     pub const SLIDER: i32 = 0b10;
     pub const SPINNER: i32 = 0b1000;
+}
+
+pub struct OsuModeV2;
+impl OsuModeV2 {
+    pub const STANDARD: i32 = 0;
+    pub const _TAIKO: i32 = 1;
+    pub const _CATCH: i32 = 2;
+    pub const _MANIA: i32 = 3;
 }
 
 pub struct Foot {
