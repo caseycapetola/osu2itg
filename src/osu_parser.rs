@@ -5,8 +5,8 @@ use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; use na
 use num::Integer;
 use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file}};
 use crate::osu_util::{calc_qn_duration, check_std, check_std_v2, next_step};
-use crate::utils::common::calc_bpm;
-use crate::constants::{Foot, OsuFields, TimingPointFields};
+use crate::utils::common::{calc_bpm, calc_beat_duration};
+use crate::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType, TimingPointFields};
 use crate::osu;
 use regex::Regex;
 
@@ -641,6 +641,9 @@ impl OsuParserV2 {
         self.write_metadata(&mut file);
         file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
         let bpms = self.write_bpms(&mut file);
+
+        // SENDING HARDCODED BPM FOR NOW, NEED TO HANDLE BPM CHANGES
+        self.write_steps(&mut file, bpms[0]).expect("Unable to write steps");
         
 
 
@@ -708,6 +711,74 @@ impl OsuParserV2 {
         file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
 
         let beat_division = get_min_beat_division(&self.hit_objects, bpm);
+        println!("Using beat division of {}", beat_division);
+        let beat_length = calc_beat_duration(bpm, beat_division);
+        println!("Calculated beat length of {}", beat_length);
+
+        let mut prev_time: f32;
+        let mut curr_time: f32 = 0.0;
+
+        // Track location in measure
+        let mut beat_count = 0;
+
+        // Track step location/cadence
+        let mut foot: Foot = Foot::new(Foot::LEFT);
+        let mut prev_step  = SM5NoteType::LSTEP.to_string();
+        let mut prev_note_type = OsuNoteTypeV2::TAP;
+
+        for obj in self.hit_objects.iter() {
+            // Skip spinners (for now)
+            if obj.object_type & OsuNoteTypeV2::SPINNER != 0 {
+                continue;
+            }
+            prev_time = curr_time;
+            curr_time = obj.time as f32;
+            let manual_offset = 3.0; // Adjust for rounding errors
+
+            // Edge Case: First note
+            if prev_time == 0.0 {
+                if obj.object_type == OsuNoteTypeV2::SLIDER {
+                    file.write_all(format!("{}\n", SM5NoteType::LHOLD).as_bytes()).expect("Unable to write data");
+                    prev_step = SM5NoteType::LHOLD.to_string();
+                }
+                else {
+                    file.write_all(format!("{}\n", SM5NoteType::LSTEP).as_bytes()).expect("Unable to write data");
+                }
+                prev_note_type = obj.object_type;
+                foot.switch_foot();
+                beat_count += 1;
+                println!("Completed first note at time {}", curr_time);
+                continue;
+            }
+
+            let mut dist =  ((curr_time - prev_time + manual_offset)/beat_length).floor();
+            while dist > 1.0 {
+                if beat_count == beat_division {
+                    file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                    beat_count = 0;
+                }
+                file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                beat_count += 1;
+                dist -= 1.0;
+            }
+            // Need to check end of measure if we exit while loop at precise point
+            if beat_count == beat_division {
+                file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                beat_count = 0;
+            }
+            prev_step = next_step(prev_step, foot.state, prev_note_type, obj.object_type);
+            file.write_all(format!("{}\n", prev_step).as_bytes()).expect("Unable to write data");
+            prev_note_type = obj.object_type;
+            foot.switch_foot();
+            beat_count += 1;
+        }
+
+        // Complete last measure
+        while beat_count < beat_division {
+            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+            beat_count += 1;
+        }
+        file.write_all(";\n".as_bytes()).expect("Unable to write data");
 
 
         Ok(())

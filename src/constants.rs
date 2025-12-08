@@ -14,6 +14,13 @@ impl OsuNoteType {
     }
 }
 
+pub struct OsuNoteTypeV2;
+impl OsuNoteTypeV2 {
+    pub const TAP: i32 = 0b1;
+    pub const SLIDER: i32 = 0b10;
+    pub const SPINNER: i32 = 0b1000;
+}
+
 pub struct Foot {
   pub state: i8,
 }

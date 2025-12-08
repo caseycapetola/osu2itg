@@ -1,7 +1,7 @@
 // Common utility functions
 
 use num::Integer;
-use crate::osu::hit_object::{self, HitObject};
+use crate::osu::hit_object::{HitObject};
 
 // Calculate BPM from quarter note length (in milliseconds)
 // https://tuneform.com/tools/time-tempo-bpm-to-milliseconds-ms
@@ -14,7 +14,7 @@ pub fn calc_bpm(beat_length: f32) -> f32 {
 }
 
 // Calculate quarter note duration (in milliseconds) from BPM
-fn calc_beat_duration(bpm: f32, beat_division: i32) -> f32 {
+pub fn calc_beat_duration(bpm: f32, beat_division: i32) -> f32 {
     if bpm <= 0.0 {
         return 0.0;
     }
