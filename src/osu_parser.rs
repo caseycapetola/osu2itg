@@ -1,10 +1,9 @@
-use core::error;
 // osu!std file parser
-use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; use native_windows_gui::stretch::result;
+use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
 //, collections::HashMap};
 use num::Integer;
-use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file}};
-use crate::osu_util::{calc_qn_duration, check_std, check_std_v2, next_step};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file::parse_file}};
+use crate::osu_util::{check_std_v2, next_step};
 use crate::utils::common::{calc_bpm, calc_beat_duration};
 use crate::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType, TimingPointFields};
 use crate::osu;
@@ -12,6 +11,7 @@ use regex::Regex;
 
 #[derive(Clone)]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum OsuHeader {
     General(Vec<String>),
     Editor(Vec<String>),
@@ -36,11 +36,11 @@ pub struct OsuParser {
 }
 
 pub struct OsuParserV2 {
-    file: String,
+    _file: String,
     general: osu::general::General,
     _editor: osu::editor::Editor,
     metadata: osu::metadata::Metadata,
-    difficulty: osu::difficulty::Difficulty,
+    _difficulty: osu::difficulty::Difficulty,
     _events: osu::events::Events,
     timing_points: Vec<osu::timing::TimingPoint>,
     _colours: Vec<osu::colour::Colour>,
@@ -189,15 +189,15 @@ impl OsuParser {
     // Write fields to chart file
     pub fn write_chart(&mut self, osu_data: &Vec<String>, file: &str, offset: f32) {
         // verify file is osu!std file
-        let general_data = match &self.general {
-            OsuHeader::General(data) => data,
-            _ => panic!("Invalid header type"),
-        };
-        let (successful, error_msg) = check_std(general_data);
-        match successful {
-            false => panic!("Could not configure ITG file: {}", error_msg),
-            true => (),
-        }
+        // let general_data = match &self.general {
+        //     OsuHeader::General(data) => data,
+        //     _ => panic!("Invalid header type"),
+        // };
+        // let (successful, error_msg) = check_std(general_data);
+        // match successful {
+        //     false => panic!("Could not configure ITG file: {}", error_msg),
+        //     true => (),
+        // }
 
         // let mut file = File::create(file).expect("Unable to create file");
         let binding = file.to_string();
@@ -419,7 +419,7 @@ impl OsuParser {
                 .first()
                 .map(|hit_object| hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap())
                 .unwrap_or(0.0);
-            let qn_duration = calc_qn_duration(bpm);
+            let qn_duration = calc_beat_duration(bpm, 4);
             let mut note_types: Vec<i32> = Vec::new();
 
             for i in hit_objects {
@@ -486,7 +486,7 @@ impl OsuParser {
                 }
                 let bpm = (60000.0 / parts[TimingPointFields::BEAT_LENGTH].parse::<f32>().unwrap() * 1000.0).round() / 1000.0;
                 let time = parts[TimingPointFields::TIME].parse::<i32>().unwrap();
-                let beat_count = ((time - prev_time) as f32 / calc_qn_duration(prev_bpm) * 1000.0).round() / 1000.0;
+                let beat_count = ((time - prev_time) as f32 / calc_beat_duration(prev_bpm, 4) * 1000.0).round() / 1000.0;
                 bpms.push((beat_count, bpm));
                 println!("BPM: {}, Time: {}, Beat Count: {}", bpm, parts[TimingPointFields::TIME], beat_count);
                 prev_bpm = bpm;
@@ -513,96 +513,97 @@ impl OsuParser {
         1.0
     }
 
-    fn prepare_chart(&self, timing_points: &Vec<String>, hit_objects: &Vec<String>) {
-        if timing_points.is_empty() || hit_objects.is_empty() {
-            return;
-        }
+    // fn _prepare_chart(&self, timing_points: &Vec<String>, hit_objects: &Vec<String>) {
+    //     if timing_points.is_empty() || hit_objects.is_empty() {
+    //         return;
+    //     }
 
-        let mut t: usize = 0;
-        let mut h: usize = 0;
-        // Pop first timing point and hit object
-        let mut current_timing_point: &String;
-        let mut current_hit_object: &String;
+    //     let mut t: usize = 0;
+    //     let mut h: usize = 0;
+    //     // Pop first timing point and hit object
+    //     let mut current_timing_point: &String;
+    //     let mut current_hit_object: &String;
 
-        let mut chart_data: Vec<String> = vec![];
-        let mut bpm_changes: Vec<(f32, f32)> = vec![];
-        let mut temp_bpm_changes: Vec<(f32, f32)> = vec![];
-        let mut hit_objects: Vec<&String> = vec![];
-        let mut prev_bpm: f32 = 0.0;
-        let mut prev_time: f32 = 0.0;
-        let mut prev_timing_point_time: f32 = 0.0;
-        let mut prev_hit_object_time: f32 = 0.0;
-        let mut foot: Foot = Foot::new(Foot::LEFT);
-        let mut prev_step = "1000".to_string();
-        let mut prev_note_type = 0b1;
+    //     let mut chart_data: Vec<String> = vec![];
+    //     let mut bpm_changes: Vec<(f32, f32)> = vec![];
+    //     let mut temp_bpm_changes: Vec<(f32, f32)> = vec![];
+    //     let mut hit_objects: Vec<&String> = vec![];
+    //     let mut prev_bpm: f32 = 0.0;
+    //     let mut prev_time: f32 = 0.0;
+    //     let mut prev_timing_point_time: f32 = 0.0;
+    //     let mut prev_hit_object_time: f32 = 0.0;
+    //     let mut foot: Foot = Foot::new(Foot::LEFT);
+    //     let mut prev_step = "1000".to_string();
+    //     let mut prev_note_type = 0b1;
 
-        // Hardcoded to account for worst case
-        let beat_division = 192;
+    //     // Hardcoded to account for worst case
+    //     let beat_division = 192;
 
 
-        while t < timing_points.len() && h < hit_objects.len() {
-            current_timing_point = &timing_points[t];
-            current_hit_object = &hit_objects[h];
+    //     while t < timing_points.len() && h < hit_objects.len() {
+    //         current_timing_point = &timing_points[t];
+    //         current_hit_object = &hit_objects[h];
             
-            // Get timing point time
-            let timing_point_time = current_timing_point.split(',').nth(0).unwrap().parse::<f32>().unwrap();
-            let uninherited = current_timing_point.split(',').nth(6).unwrap().parse::<i32>().unwrap();
-            let hit_object_time = current_hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap();
-            let note_type = current_hit_object.split(',').nth(3).unwrap().parse::<i32>().unwrap();
+    //         // Get timing point time
+    //         let timing_point_time = current_timing_point.split(',').nth(0).unwrap().parse::<f32>().unwrap();
+    //         let uninherited = current_timing_point.split(',').nth(6).unwrap().parse::<i32>().unwrap();
+    //         let hit_object_time = current_hit_object.split(',').nth(2).unwrap().parse::<f32>().unwrap();
+    //         let note_type = current_hit_object.split(',').nth(3).unwrap().parse::<i32>().unwrap();
 
-            // Skip timing points that are not uninherited
-            if uninherited == 0 {
-                t += 1;
-                continue;
-            }
+    //         // Skip timing points that are not uninherited
+    //         if uninherited == 0 {
+    //             t += 1;
+    //             continue;
+    //         }
 
-            // Skip spinners
-            if note_type & 0b1000 == 0b1000 {
-                h += 1;
-                continue;
-            }
+    //         // Skip spinners
+    //         if note_type & 0b1000 == 0b1000 {
+    //             h += 1;
+    //             continue;
+    //         }
             
-            let bpm = 60000.0 / current_timing_point.split(',').nth(TimingPointFields::BEAT_LENGTH).unwrap().parse::<f32>().unwrap();
+    //         let bpm = 60000.0 / current_timing_point.split(',').nth(TimingPointFields::BEAT_LENGTH).unwrap().parse::<f32>().unwrap();
             
-            if timing_point_time <= hit_object_time {
-                if hit_objects.is_empty() {
-                    bpm_changes.push((0.0, bpm));
-                    prev_timing_point_time = timing_point_time;
-                    prev_hit_object_time = timing_point_time;
-                    prev_bpm = bpm;
-                }
-                else {
-                    let beat_count = ((timing_point_time - prev_timing_point_time) as f32 / calc_qn_duration(prev_bpm) * 1000.0).round() / 1000.0;
-                    bpm_changes.push((beat_count, bpm));
-                    temp_bpm_changes.push((beat_count, bpm));
-                    prev_timing_point_time = timing_point_time;
-                }
-            }
-            else {
-                // CASE 1: No BPM change
-                if temp_bpm_changes.is_empty() {
-                    if chart_data.is_empty() {
-                        // 240,000/bpm = length of whole note/measure --> calculating distance in beats
-                        let mut dist = ((hit_object_time - prev_hit_object_time + 3.0)/(240_000.0/(prev_bpm * beat_division as f32))).floor();
+    //         if timing_point_time <= hit_object_time {
+    //             if hit_objects.is_empty() {
+    //                 bpm_changes.push((0.0, bpm));
+    //                 prev_timing_point_time = timing_point_time;
+    //                 prev_hit_object_time = timing_point_time;
+    //                 prev_bpm = bpm;
+    //             }
+    //             else {
+    //                 let beat_count = ((timing_point_time - prev_timing_point_time) as f32 / calc_beat_duration(prev_bpm, 4) * 1000.0).round() / 1000.0;
+    //                 bpm_changes.push((beat_count, bpm));
+    //                 temp_bpm_changes.push((beat_count, bpm));
+    //                 prev_timing_point_time = timing_point_time;
+    //             }
+    //         }
+    //         else {
+    //             // CASE 1: No BPM change
+    //             if temp_bpm_changes.is_empty() {
+    //                 if chart_data.is_empty() {
+    //                     // 240,000/bpm = length of whole note/measure --> calculating distance in beats
+    //                     let mut dist = ((hit_object_time - prev_hit_object_time + 3.0)/(240_000.0/(prev_bpm * beat_division as f32))).floor();
                         
-                        // Continue with write_steps implementation below
-                    }
-                }
-            }
+    //                     // Continue with write_steps implementation below
+    //                 }
+    //             }
+    //         }
 
-        }
-    }
+    //     }
+    // }
 }
 
 
 impl OsuParserV2 {
-    pub fn new(file: String, file_data: Vec<String>) -> Self {
+    pub fn new(file: String) -> Self {
+        let file_data = parse_file(file.clone());
         let parser_v2 = OsuParserV2 {
-            file: file,
+            _file: file,
             general: osu::general::General::new(file_data[OsuFields::GENERAL].clone()),
             _editor: osu::editor::Editor::new(file_data[OsuFields::EDITOR].clone()),
             metadata: osu::metadata::Metadata::new(file_data[OsuFields::METADATA].clone()),
-            difficulty: osu::difficulty::Difficulty::new(file_data[OsuFields::DIFFICULTY].clone()),
+            _difficulty: osu::difficulty::Difficulty::new(file_data[OsuFields::DIFFICULTY].clone()),
             _events: osu::events::Events::new(file_data[OsuFields::EVENTS].clone()),
             timing_points: get_timing_point_vec_from_data(file_data[OsuFields::TIMING_POINTS].clone()),
             _colours: get_colours_from_data(file_data[OsuFields::COLOURS].clone()),
@@ -610,14 +611,6 @@ impl OsuParserV2 {
         };
         
         parser_v2
-    }
-
-    pub fn test_init(&self) {
-        // println!("GENERAL: {:?}", self.general);
-        // println!("METADATA: {:?}", self.metadata);
-        // println!("DIFFICULTY: {:?}", self.difficulty);
-        // println!("TIMING POINTS: {:?}", self.timing_points);
-        // println!("HIT OBJECTS: {:?}", self.hit_objects);
     }
 
     pub fn write_chart(&self, output_path: &str, offset: f32) {

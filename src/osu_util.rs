@@ -1,47 +1,9 @@
 use rand::Rng;
 use crate::constants::*;
 
-// Calculate quarter note duration
-pub fn calc_qn_duration(bpm: f32) -> f32 {
-    60000.0 / bpm
-}
-
-enum OsuMode {
-    Standard,
-    _Taiko,
-    _Catch,
-    _Mania,
-}
-
-impl OsuMode {
-    pub fn val(&self) -> i32 {
-        match self {
-            OsuMode::Standard => 0,
-            OsuMode::_Taiko => 1,
-            OsuMode::_Catch => 2,
-            OsuMode::_Mania => 3,
-        }
-    }
-}
-
 // Checks if file is osu!std file
-pub fn check_std(data: &Vec<String>) -> (bool, &str) {
-    let mut iter = data.iter();
-    while let Some(line) = iter.next() {
-        if line.contains("Mode") {
-            // Check if mode is 0
-            let mode = line.split(":").collect::<Vec<&str>>()[1].trim().parse::<i32>().unwrap();
-            if mode == OsuMode::Standard.val() {
-                return (true, "");
-            }
-            return (false, "File passed is not osu!std file");
-        }
-    }
-    return (false, "Cannot determine if file is osu!std file");
-}
-
 pub fn check_std_v2(mode: i32) -> (bool, &'static str) {
-    if mode == OsuMode::Standard.val() {
+    if mode == OsuModeV2::STANDARD {
         return (true, "");
     }
     return (false, "File passed is not osu!std file");
@@ -51,7 +13,7 @@ pub fn check_std_v2(mode: i32) -> (bool, &'static str) {
 // Determine next step location -> 0 = left, 1 = right
 pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32) -> String {
     // CASE 1: Previous note was a tap note
-    if prev_note_type & OsuNoteType::Tap.val() == OsuNoteType::Tap.val() {
+    if prev_note_type & OsuNoteTypeV2::TAP == OsuNoteTypeV2::TAP {
         match prev.as_str() {
             SM5NoteType::LSTEP | SM5NoteType::LSTEP_DRELEASE | SM5NoteType::LSTEP_URELEASE | SM5NoteType::LSTEP_RRELEASE => {
                 if new_foot == Foot::RIGHT {
