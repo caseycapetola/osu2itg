@@ -40,6 +40,13 @@ pub fn check_std(data: &Vec<String>) -> (bool, &str) {
     return (false, "Cannot determine if file is osu!std file");
 }
 
+pub fn check_std_v2(mode: i32) -> (bool, &'static str) {
+    if mode == OsuMode::Standard.val() {
+        return (true, "");
+    }
+    return (false, "File passed is not osu!std file");
+}
+
 // TODO: Add flag to toggle on footswitches/crossovers
 // Determine next step location -> 0 = left, 1 = right
 pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32) -> String {
@@ -313,13 +320,6 @@ pub fn _slider_length(length: f32, slider_multiplier: f32, slider_velocity_multi
     return slider_length;
 }
 
-
-pub struct Delimiter;
-
-impl Delimiter {
-    pub const _MAC: &'static str = "\n";
-    pub const WINDOWS: &'static str = "\r\n";
-}
 
 // Returns the type of note in ITG format
 fn _note_type_to_itg(note_type: i8) -> i8 {

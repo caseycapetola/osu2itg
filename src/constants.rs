@@ -14,6 +14,13 @@ impl OsuNoteType {
     }
 }
 
+pub struct OsuNoteTypeV2;
+impl OsuNoteTypeV2 {
+    pub const TAP: i32 = 0b1;
+    pub const SLIDER: i32 = 0b10;
+    pub const SPINNER: i32 = 0b1000;
+}
+
 pub struct Foot {
   pub state: i8,
 }
@@ -73,4 +80,28 @@ impl SM5NoteType {
   pub const RHOLD_DRELEASE: &'static str = "0302";
   pub const RHOLD_URELEASE: &'static str = "0032";
   pub const QUADSTEP: &'static str = "1111";
+}
+
+pub struct TimingPointFields;
+impl TimingPointFields {
+    pub const TIME: usize = 0;
+    pub const BEAT_LENGTH: usize = 1;
+    pub const METER: usize = 2;
+    pub const SAMPLE_SET: usize = 3;
+    pub const SAMPLE_INDEX: usize = 4;
+    pub const VOLUME: usize = 5;
+    pub const UNINHERITED: usize = 6;
+    pub const EFFECTS: usize = 7;
+}
+
+pub struct OsuFields;
+impl OsuFields {
+    pub const GENERAL: usize = 0;
+    pub const EDITOR: usize = 1;
+    pub const METADATA: usize = 2;
+    pub const DIFFICULTY: usize = 3;
+    pub const EVENTS: usize = 4;
+    pub const TIMING_POINTS: usize = 5;
+    pub const COLOURS: usize = 6;
+    pub const HIT_OBJECTS: usize = 7;
 }
