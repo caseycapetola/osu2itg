@@ -594,7 +594,7 @@ impl OsuParser {
 
 impl OsuParserV2 {
     pub fn new(file: String, file_data: Vec<String>) -> Self {
-        let mut parser_v2 = OsuParserV2 {
+        let parser_v2 = OsuParserV2 {
             file: file,
             general: osu::general::General::new(file_data[OsuFields::GENERAL].clone()),
             _editor: osu::editor::Editor::new(file_data[OsuFields::EDITOR].clone()),
@@ -608,6 +608,15 @@ impl OsuParserV2 {
         
         parser_v2
     }
+
+    pub fn test_init(&self) {
+        println!("GENERAL: {:?}", self.general);
+        println!("METADATA: {:?}", self.metadata);
+        println!("DIFFICULTY: {:?}", self.difficulty);
+        // println!("TIMING POINTS: {:?}", self.timing_points);
+        // println!("HIT OBJECTS: {:?}", self.hit_objects);
+    }
+
 }
 
 #[cfg(test)]

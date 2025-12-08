@@ -9,6 +9,8 @@ use eframe::egui;
 use rfd::FileDialog;
 use std::path::PathBuf;
 use crate::osu_parser::OsuParser;
+use crate::osu_parser::OsuParserV2;
+use crate::utils::file::parse_file;
 
 struct MyApp {
     selected_file: Option<PathBuf>,
@@ -54,6 +56,16 @@ impl eframe::App for MyApp {
 
             if let Some(ref output) = self.output_file {
                 ui.label(format!("Output File: {}", output));
+            }
+
+            if let Some(ref path) = self.selected_file {
+                ui.label("Test Parser V2");
+                if ui.button("Parse with V2").clicked() {
+                    let file_path = path.to_string_lossy().to_string();
+                    let parser_v2 = OsuParserV2::new(file_path.clone(), parse_file(file_path.clone()));
+                    parser_v2.test_init();
+                    println!("Parsed with V2");
+                }
             }
         });
     }

@@ -4,7 +4,8 @@ pub fn get_timing_point_vec_from_data(data: String) -> Vec<TimingPoint> {
         if line.contains("[") && !line.contains("TimingPoints") {
             println!("Issue with parsing TimingPoints section, exiting parse.");
             break;
-        } else if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
+        }
+        if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
             continue;
         }
         timing_points.push(TimingPoint::new(line.to_string()));

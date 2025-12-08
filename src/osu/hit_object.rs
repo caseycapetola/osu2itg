@@ -5,7 +5,8 @@ pub fn get_hit_object_vec_from_data(data: String) -> Vec<HitObject> {
         if line.contains("[") && !line.contains("HitObjects") {
             println!("Issue with parsing HitObjects section, exiting parse.");
             break;
-        } else if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
+        }
+        if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
             continue;
         }
         hit_objects.push(HitObject::new(line.to_string()));

@@ -36,7 +36,8 @@ impl Metadata {
             if line.contains("[") && !line.contains("Metadata") {
                 println!("Issue with parsing Metadata section, exiting parse.");
                 break;
-            } else if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
+            }
+            if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
                 continue;
             }
             // Parse key-value pairs

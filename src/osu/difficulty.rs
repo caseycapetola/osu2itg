@@ -28,7 +28,8 @@ impl Difficulty {
             if line.contains("[") && !line.contains("Difficulty") {
                 println!("Issue with parsing Difficulty section, exiting parse.");
                 break;
-            } else if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
+            } 
+            if line.trim().is_empty() || line.contains("[") || line.starts_with("//") {
                 continue;
             }
             // Parse key-value pairs
