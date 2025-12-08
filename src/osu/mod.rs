@@ -7,5 +7,5 @@ pub mod metadata;
 pub mod difficulty;
 pub mod events;
 pub mod timing;
-pub mod color;
+pub mod colour;
 pub mod hit_object;

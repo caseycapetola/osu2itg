@@ -86,3 +86,15 @@ impl TimingPointFields {
     pub const UNINHERITED: usize = 6;
     pub const EFFECTS: usize = 7;
 }
+
+pub struct OsuFields;
+impl OsuFields {
+    pub const GENERAL: usize = 0;
+    pub const EDITOR: usize = 1;
+    pub const METADATA: usize = 2;
+    pub const DIFFICULTY: usize = 3;
+    pub const EVENTS: usize = 4;
+    pub const TIMING_POINTS: usize = 5;
+    pub const COLOURS: usize = 6;
+    pub const HIT_OBJECTS: usize = 7;
+}

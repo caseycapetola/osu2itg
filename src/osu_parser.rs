@@ -1,9 +1,10 @@
 // osu!std file parser
 use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec}; //, collections::HashMap};
 use num::Integer;
-use crate::file_tools::{Serialize, OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}};
 use crate::osu_util::{calc_qn_duration, check_std, next_step};
-use crate::constants::{Foot, TimingPointFields};
+use crate::constants::{Foot, OsuFields, TimingPointFields};
+use crate::osu;
 use regex::Regex;
 
 #[derive(Clone)]
@@ -29,6 +30,18 @@ pub struct OsuParser {
     timing_points: OsuHeader,
     _colours: OsuHeader,
     pub hit_objects: OsuHeader,
+}
+
+pub struct OsuParserV2 {
+    file: String,
+    general: osu::general::General,
+    _editor: osu::editor::Editor,
+    metadata: osu::metadata::Metadata,
+    difficulty: osu::difficulty::Difficulty,
+    _events: osu::events::Events,
+    timing_points: Vec<osu::timing::TimingPoint>,
+    _colours: Vec<osu::colour::Colour>,
+    pub hit_objects: Vec<osu::hit_object::HitObject>,
 }
 
 
@@ -575,6 +588,25 @@ impl OsuParser {
             }
 
         }
+    }
+}
+
+
+impl OsuParserV2 {
+    pub fn new(file: String, file_data: Vec<String>) -> Self {
+        let mut parser_v2 = OsuParserV2 {
+            file: file,
+            general: osu::general::General::new(file_data[OsuFields::GENERAL].clone()),
+            _editor: osu::editor::Editor::new(file_data[OsuFields::EDITOR].clone()),
+            metadata: osu::metadata::Metadata::new(file_data[OsuFields::METADATA].clone()),
+            difficulty: osu::difficulty::Difficulty::new(file_data[OsuFields::DIFFICULTY].clone()),
+            _events: osu::events::Events::new(file_data[OsuFields::EVENTS].clone()),
+            timing_points: get_timing_point_vec_from_data(file_data[OsuFields::TIMING_POINTS].clone()),
+            _colours: get_colours_from_data(file_data[OsuFields::COLOURS].clone()),
+            hit_objects: get_hit_object_vec_from_data(file_data[OsuFields::HIT_OBJECTS].clone()),
+        };
+        
+        parser_v2
     }
 }
 
