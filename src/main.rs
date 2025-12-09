@@ -58,7 +58,7 @@ impl eframe::App for MyApp {
                 if ui.button("Parse with V2").clicked() {
                     let file_path = path.to_string_lossy().to_string();
                     let parser_v2 = OsuParserV2::new(file_path.clone());
-                    let output_path = format!("{}.ssc", file_path.trim_end_matches(".osu"));
+                    let output_path = format!("{}_v2.ssc", file_path.trim_end_matches(".osu"));
                     parser_v2.write_chart(&output_path, self.offset);
                     self.output_file = Some(output_path);
                 }

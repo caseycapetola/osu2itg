@@ -1,5 +1,5 @@
 // osu!std file parser
-use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
+use std::{collections::VecDeque, fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
 //, collections::HashMap};
 use num::Integer;
 use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file::parse_file}};
@@ -636,7 +636,9 @@ impl OsuParserV2 {
         let bpms = self.write_bpms(&mut file);
 
         // SENDING HARDCODED BPM FOR NOW, NEED TO HANDLE BPM CHANGES
-        self.write_steps(&mut file, bpms[0]).expect("Unable to write steps");
+        self.write_steps(&mut file, bpms[0].1).expect("Unable to write steps");
+        //
+        // self.write_steps_v2(&mut file, bpms).expect("Unable to write steps");
         
 
 
@@ -658,18 +660,38 @@ impl OsuParserV2 {
         file.write(format!("#STEPSTITLE:{};\n", self.metadata.version).as_bytes()).expect("Unable to write data");
     }
 
-    fn write_bpms(&self, file: &mut File) -> Vec<f32> {
-        let mut res: Vec<f32> = vec![];
+    // Write BPM changes to chart file, return vector of (time, bpm) tuples
+    fn write_bpms(&self, file: &mut File) -> Vec<(f32, f32)> {
+        let mut res: Vec<(f32, f32)> = vec![];
         
         let mut bpm_string = String::from("#BPMS:");
         let mut min_bpm = std::f32::MAX;
         let mut max_bpm = std::f32::MIN;
+
+        // Track previous BPM to determine beat counts between changes
+        let mut prev_bpm: f32 = 0.0;
+        let mut prev_time: f32 = 0.0;
+        let mut prev_beat_count: f32 = 0.0;
+        let manual_offset: f32 = 3.0; // Adjust for rounding errors
+
         for tp in self.timing_points.iter() {
             if tp.uninherited == true {
                 let bpm = calc_bpm(tp.beat_length);
                 // let time_in_seconds = tp.time as f32 / 1000.0; // MAY USE THIS LATER, FOR NOW HARDCODE 0.000
-                bpm_string.push_str(&format!("0.000={:.3},", bpm));
-                res.push(bpm);
+                
+                if prev_bpm == 0.0 {
+                    bpm_string.push_str(&format!("0.000={:.3},", bpm));
+                    prev_bpm = bpm;
+                    prev_time = tp.time as f32;
+                } else {
+                    let beat_count = prev_beat_count + ((tp.time as f32 - prev_time + manual_offset) / calc_beat_duration(prev_bpm, 4) * 1000.0).round() / 1000.0;
+                    bpm_string.push_str(&format!("{:.3}={:.3},", beat_count, bpm));
+                    prev_bpm = bpm;
+                    prev_time = tp.time as f32;
+                    prev_beat_count = beat_count;
+                }
+                
+                res.push((prev_time, bpm));
                 if bpm < min_bpm {
                     min_bpm = bpm;
                 }
@@ -717,6 +739,7 @@ impl OsuParserV2 {
         // Track step location/cadence
         let mut foot: Foot = Foot::new(Foot::LEFT);
         let mut prev_step  = SM5NoteType::LSTEP.to_string();
+        println!("testing: {}", prev_step.as_str() == SM5NoteType::LSTEP);
         let mut prev_note_type = OsuNoteTypeV2::TAP;
 
         for obj in self.hit_objects.iter() {
@@ -730,7 +753,9 @@ impl OsuParserV2 {
 
             // Edge Case: First note
             if prev_time == 0.0 {
-                if obj.object_type == OsuNoteTypeV2::SLIDER {
+                println!("Object Type: {}", obj.object_type);
+                if obj.object_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
+                    println!("First note is a slider");
                     file.write_all(format!("{}\n", SM5NoteType::LHOLD).as_bytes()).expect("Unable to write data");
                     prev_step = SM5NoteType::LHOLD.to_string();
                 }
@@ -739,8 +764,9 @@ impl OsuParserV2 {
                 }
                 prev_note_type = obj.object_type;
                 foot.switch_foot();
+                println!("First Step: {}", prev_step);
+                println!("Foot after switch: {:?}", foot.state);
                 beat_count += 1;
-                println!("Completed first note at time {}", curr_time);
                 continue;
             }
 
@@ -777,6 +803,152 @@ impl OsuParserV2 {
         Ok(())
     }
 
+    fn _write_steps_v2(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
+        // Placeholder for potential future implementation
+        // Write standard header
+        file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
+        file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
+
+        // Write one empty measure for buffer
+        file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+
+        // Pop initial bpm info from vector
+        let mut bpm_queue: VecDeque<(f32, f32)> = VecDeque::from(bpms);
+        if bpm_queue.is_empty() {
+            println!("No BPM changes found, exiting write_steps_v2");
+            return Ok(());
+        }
+        let (mut prev_bpm_time, mut prev_bpm) = bpm_queue.pop_front().unwrap();
+
+        // Set initial beat division and beat length
+        let mut beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
+        let mut beat_length = calc_beat_duration(prev_bpm, beat_division);
+
+        let mut prev_time: f32;
+        let mut curr_time: f32 = 0.0;
+
+        // Track location in measure
+        let mut beat_count = 0;
+
+        // Track step location/cadence
+        let mut foot: Foot = Foot::new(Foot::LEFT);
+        let mut prev_step  = SM5NoteType::LSTEP.to_string();
+        let mut prev_note_type = OsuNoteTypeV2::TAP;
+
+        for obj in self.hit_objects.iter() {
+            // Skip spinners (for now)
+            if obj.object_type & OsuNoteTypeV2::SPINNER != 0 {
+                continue;
+            }
+            prev_time = curr_time;
+            curr_time = obj.time as f32;
+            let manual_offset = 3.0; // Adjust for rounding errors
+
+            // Edge Case: First note
+            if prev_time == 0.0 {
+                // We need to check to see if first note is after the first timing point
+                // Fill the space with empty measures if so
+                while curr_time > prev_bpm_time {
+                    let mut dist = ((curr_time - prev_bpm_time + manual_offset)/beat_length).floor();
+                    
+                    while dist > 1.0 {
+                        if beat_count == beat_division {
+                            file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                            beat_count = 0;
+                        }
+                        file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                        beat_count += 1;
+                        dist -= 1.0;
+                    }
+                    // Need to check end of measure if we exit while loop at precise point
+                    if beat_count == beat_division {
+                        file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                        beat_count = 0;
+                    }
+
+                    // Pop next bpm change, if available
+                    if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front(){
+                        prev_bpm_time = next_bpm_time;
+                        prev_bpm = next_bpm;
+                        beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
+                        beat_length = calc_beat_duration(prev_bpm, beat_division);
+                    } else {
+                        break;
+                    }
+                }
+
+                // Print first note
+                if obj.object_type == OsuNoteTypeV2::SLIDER {
+                    file.write_all(format!("{}\n", SM5NoteType::LHOLD).as_bytes()).expect("Unable to write data");
+                    prev_step = SM5NoteType::LHOLD.to_string();
+                } else {
+                    file.write_all(format!("{}\n", SM5NoteType::LSTEP).as_bytes()).expect("Unable to write data");
+                }
+                prev_note_type = obj.object_type;
+                foot.switch_foot();
+                beat_count += 1;
+                println!("Completed first note at time {}", curr_time);
+                continue;
+            }
+
+            // Check for BPM changes between previous and current note
+            while curr_time > prev_bpm_time {
+                // Need to fill in empty measures up to BPM change
+                let mut dist = ((prev_bpm_time - prev_time + manual_offset)/beat_length).floor();
+                while dist > 1.0 {
+                    if beat_count == beat_division {
+                        file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                        beat_count = 0;
+                    }
+                    file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                    beat_count += 1;
+                    dist -= 1.0;
+                }
+                // Update previous time to BPM change time
+                prev_time = prev_bpm_time;
+                // Pop next bpm change, if available
+                if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front() {
+                    prev_bpm_time = next_bpm_time;
+                    prev_bpm = next_bpm;
+                    beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
+                    beat_length = calc_beat_duration(prev_bpm, beat_division);
+                } else {
+                    break;
+                }
+            }
+
+            // Now process the current note
+            let mut dist =  ((curr_time - prev_time + manual_offset)/beat_length).floor();
+            while dist > 1.0 {
+                if beat_count == beat_division {
+                    file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                    beat_count = 0;
+                }
+                file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                beat_count += 1;
+                dist -= 1.0;
+            }
+            // Need to check end of measure if we exit while loop at precise point
+            if beat_count == beat_division {
+                file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                beat_count = 0;
+            }
+            prev_step = next_step(prev_step, foot.state, prev_note_type, obj.object_type);
+            file.write_all(format!("{}\n", prev_step).as_bytes()).expect("Unable to write data");
+            prev_note_type = obj.object_type;
+            foot.switch_foot();
+            beat_count += 1;
+        }
+
+        // Complete last measure
+        while beat_count < beat_division {
+            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+            beat_count += 1;
+        }
+        file.write_all(";\n".as_bytes()).expect("Unable to write data");
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]

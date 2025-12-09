@@ -80,7 +80,7 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
             },
             SM5NoteType::DSTEP | SM5NoteType::DSTEP_LRELEASE | SM5NoteType::DSTEP_URELEASE | SM5NoteType::DSTEP_RRELEASE => {
                 let num = rand::thread_rng().gen_range(0..2);
-                if new_foot == 1 {
+                if new_foot == Foot::RIGHT {
                     if num == 0 {
                         if note_type & 0b10 == 0b10 {
                             return SM5NoteType::UHOLD.to_string();
@@ -111,7 +111,7 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
             },
             SM5NoteType::USTEP | SM5NoteType::USTEP_LRELEASE | SM5NoteType::USTEP_DRELEASE | SM5NoteType::USTEP_RRELEASE => {
                 let num = rand::thread_rng().gen_range(0..2);
-                if new_foot == 1 {
+                if new_foot == Foot::RIGHT {
                     if num == 0 {
                         if note_type & 0b10 == 0b10 {
                             return SM5NoteType::DHOLD.to_string();
@@ -149,28 +149,28 @@ pub fn next_step(prev: String, new_foot: i8, prev_note_type: i32, note_type: i32
     else {
         match prev.as_str() {
             SM5NoteType::LHOLD | SM5NoteType::LHOLD_DRELEASE | SM5NoteType::LHOLD_URELEASE | SM5NoteType::LHOLD_RRELEASE => {
-                if new_foot == 1 {
+                if new_foot == Foot::RIGHT {
                     let num = rand::thread_rng().gen_range(0..3);
                     if num == 0 {
-                        if note_type & 0b10 == 0b10 {
+                        if note_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
                             return SM5NoteType::DHOLD_LRELEASE.to_string();
                         }
                         return SM5NoteType::DSTEP_LRELEASE.to_string();
                     }
                     else if num == 1 {
-                        if note_type & 0b10 == 0b10 {
+                        if note_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
                             return SM5NoteType::UHOLD_LRELEASE.to_string();
                         }
                         return SM5NoteType::USTEP_LRELEASE.to_string();
                     }
                     else {
-                        if note_type & 0b10 == 0b10 {
+                        if note_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
                             return SM5NoteType::RHOLD_LRELEASE.to_string();
                         }
                         return SM5NoteType::RSTEP_LRELEASE.to_string();
                     }
                 } else {
-                    if note_type & 0b10 == 0b10 {
+                    if note_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
                         return SM5NoteType::UHOLD_LRELEASE.to_string();
                     }
                     return SM5NoteType::USTEP_LRELEASE.to_string();
