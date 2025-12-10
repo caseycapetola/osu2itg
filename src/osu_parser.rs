@@ -2,7 +2,7 @@
 use std::{collections::VecDeque, fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
 //, collections::HashMap};
 use num::Integer;
-use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::get_min_beat_division, file::parse_file}};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::{get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::parse_file}};
 use crate::osu_util::{check_std_v2, next_step};
 use crate::utils::common::{calc_bpm, calc_beat_duration};
 use crate::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType, TimingPointFields};
@@ -685,7 +685,7 @@ impl OsuParserV2 {
                     prev_time = tp.time as f32;
                 } else {
                     let beat_count = prev_beat_count + ((tp.time as f32 - prev_time + manual_offset) / calc_beat_duration(prev_bpm, 4) * 1000.0).round() / 1000.0;
-                    bpm_string.push_str(&format!("{:.3}={:.3},", beat_count, bpm));
+                    bpm_string.push_str(&format!("{:.5}={:.3},", snap_beat_to_interval(beat_count, 1.0 / (128.0/4.0)), bpm)); // HARDCODED TO 128THS FOR NOW --> NEED TO CALCULATE MIN BEAT DIVISION TO BE MORE ACCURATE
                     prev_bpm = bpm;
                     prev_time = tp.time as f32;
                     prev_beat_count = beat_count;
@@ -803,25 +803,26 @@ impl OsuParserV2 {
         Ok(())
     }
 
-    fn _write_steps_v2(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
+    fn write_steps_v2(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
         // Placeholder for potential future implementation
         // Write standard header
         file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
         file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
 
         // Write one empty measure for buffer
-        file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
+        // file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
 
         // Pop initial bpm info from vector
-        let mut bpm_queue: VecDeque<(f32, f32)> = VecDeque::from(bpms);
+        let mut bpm_queue: VecDeque<(f32, f32)> = VecDeque::from(bpms.clone());
         if bpm_queue.is_empty() {
             println!("No BPM changes found, exiting write_steps_v2");
             return Ok(());
         }
-        let (mut prev_bpm_time, mut prev_bpm) = bpm_queue.pop_front().unwrap();
 
         // Set initial beat division and beat length
-        let mut beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
+        let beat_division = get_min_beat_division_all(&self.hit_objects, &bpms.clone());
+
+        let (mut prev_bpm_time, mut prev_bpm) = bpm_queue.pop_front().unwrap();
         let mut beat_length = calc_beat_duration(prev_bpm, beat_division);
 
         let mut prev_time: f32;
@@ -870,7 +871,6 @@ impl OsuParserV2 {
                     if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front(){
                         prev_bpm_time = next_bpm_time;
                         prev_bpm = next_bpm;
-                        beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
                         beat_length = calc_beat_duration(prev_bpm, beat_division);
                     } else {
                         break;
@@ -910,7 +910,6 @@ impl OsuParserV2 {
                 if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front() {
                     prev_bpm_time = next_bpm_time;
                     prev_bpm = next_bpm;
-                    beat_division = get_min_beat_division(&self.hit_objects, prev_bpm);
                     beat_length = calc_beat_duration(prev_bpm, beat_division);
                 } else {
                     break;
