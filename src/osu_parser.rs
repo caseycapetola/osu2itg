@@ -672,6 +672,7 @@ impl OsuParserV2 {
         let mut prev_bpm: f32 = 0.0;
         let mut prev_time: f32 = 0.0;
         let mut prev_beat_count: f32 = 0.0;
+        let mut prev_beat_duration: f32 = 0.0;
         let manual_offset: f32 = 3.0; // Adjust for rounding errors
 
         for tp in self.timing_points.iter() {
@@ -683,12 +684,14 @@ impl OsuParserV2 {
                     bpm_string.push_str(&format!("0.000={:.3},", bpm));
                     prev_bpm = bpm;
                     prev_time = tp.time as f32;
+                    prev_beat_duration = tp.beat_length
                 } else {
-                    let beat_count = prev_beat_count + ((tp.time as f32 - prev_time + manual_offset) / calc_beat_duration(prev_bpm, 4) * 1000.0).round() / 1000.0;
-                    bpm_string.push_str(&format!("{:.5}={:.3},", snap_beat_to_interval(beat_count, 1.0 / (128.0/4.0)), bpm)); // HARDCODED TO 128THS FOR NOW --> NEED TO CALCULATE MIN BEAT DIVISION TO BE MORE ACCURATE
+                    let beat_count = prev_beat_count + ((tp.time as f32 - prev_time + manual_offset) / prev_beat_duration * 1000.0).round() / 1000.0;
+                    bpm_string.push_str(&format!("{:.5}={:.3},", snap_beat_to_interval(beat_count, 1.0 / (192.0/4.0)), bpm)); // HARDCODED TO 192NDS FOR NOW --> NEED TO CALCULATE MIN BEAT DIVISION TO BE MORE ACCURATE
                     prev_bpm = bpm;
                     prev_time = tp.time as f32;
                     prev_beat_count = beat_count;
+                    prev_beat_duration = tp.beat_length;
                 }
                 
                 res.push((prev_time, bpm));
@@ -986,14 +989,15 @@ impl OsuParserV2 {
         // Check first event is a timing point and set initial time
         let mut init_time: f32;
         // Set initial bpm and beat length
-        let mut current_bpm: f32;
+        // let mut current_bpm: f32;
         let mut beat_length: f32;
         if let Some(first_event) = timeline.first() {
             match &first_event.event_type {
                 TimelineEventType::BPMChange(tp) => {
                     init_time = first_event.time;
-                    current_bpm = calc_bpm(tp.beat_length);
-                    beat_length = calc_beat_duration(current_bpm, 4);
+                    // current_bpm = calc_bpm(tp.beat_length);
+                    // beat_length = calc_beat_duration(current_bpm, 4);
+                    beat_length = tp.beat_length.abs(); // Directly use beat length in ms
                 },
                 _ => {
                     println!("First event is not a BPM change, cannot proceed.");
@@ -1009,10 +1013,13 @@ impl OsuParserV2 {
         // Create vector of ScoreObjects to hold processed notes
         let mut score_objects: Vec<ScoreObject> = vec![];
 
+        // Track total beats to account for changes in BPM
+        let mut total_beats: f32 = 0.0;
+
         for event in timeline.iter() {
             match &event.event_type {
                 TimelineEventType::BPMChange(tp) => {
-                    let beat = (event.time - init_time)/beat_length;
+                    let beat = total_beats + (event.time - init_time)/beat_length;
                     let measure_number = (beat/4.0).floor() as i32;
                     let beat_in_measure = beat % 4.0;
                     let subdivisions_per_beat = beat_division / 4;
@@ -1022,9 +1029,11 @@ impl OsuParserV2 {
 
                     score_objects.push(score_object.clone());
 
-                    current_bpm = calc_bpm(tp.beat_length);
-                    beat_length = calc_beat_duration(current_bpm, 4);
+                    // current_bpm = calc_bpm(tp.beat_length);
+                    // beat_length = calc_beat_duration(current_bpm, 4);
+                    beat_length = tp.beat_length.abs(); // Directly use beat length in ms
                     init_time = event.time;
+                    total_beats = (beat * subdivisions_per_beat as f32).round() / subdivisions_per_beat as f32;
 
                     // println!("BPM Change at time {}: New BPM = {}, Beat Length = {}", event.time, current_bpm, beat_length);
                 },
@@ -1037,7 +1046,7 @@ impl OsuParserV2 {
                         continue;
                     }
 
-                    let beat = (event.time - init_time)/beat_length;
+                    let beat = total_beats + (event.time - init_time)/beat_length;
                     let mut measure_number = (beat/4.0).floor() as i32;
                     let beat_in_measure = beat % 4.0;
                     let subdivisions_per_beat = beat_division / 4;
@@ -1077,7 +1086,7 @@ impl OsuParserV2 {
                     file.write_all("0000\n".as_bytes()).expect("Unable to write data");
                     beat_count += 1;
                 }
-                file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                file.write_all(format!(", // Measure {}\n", current_measure).as_bytes()).expect("Unable to write data");
                 current_measure += 1;
                 beat_count = 0;
             }
@@ -1114,6 +1123,7 @@ impl OsuParserV2 {
             } else {
                 // For BPM changes, we can choose to write a special marker or skip
                 // Here we choose to skip writing anything
+                // 
             }
         }
         // Complete last measure
