@@ -157,3 +157,22 @@ pub fn snap_beat_to_interval(beat: f32, interval: f32) -> f32 {
     }
     (beat / interval).round() * interval
 }
+
+// Placement of object or bpm change in musical score
+#[derive(Debug, Clone)]
+pub struct ScoreObject {
+    pub measure_number: i32,
+    pub beat_within_measure: i32,
+    pub is_hit_object: bool,
+    pub hit_object_type: Option<HitObject>,
+}
+impl ScoreObject {
+    pub fn new(measure_number: i32, beat_within_measure: i32, is_hit_object: bool) -> Self {
+        Self {
+            measure_number,
+            beat_within_measure,
+            is_hit_object,
+            hit_object_type: None,
+        }
+    }
+}

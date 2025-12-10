@@ -64,6 +64,17 @@ impl eframe::App for MyApp {
                 }
             }
 
+            if let Some(ref path) = self.selected_file {
+                ui.label("Test Parser V3");
+                if ui.button("Parse with V3").clicked() {
+                    let file_path = path.to_string_lossy().to_string();
+                    let parser_v2 = OsuParserV2::new(file_path.clone());
+                    let output_path = format!("{}_v3.ssc", file_path.trim_end_matches(".osu"));
+                    parser_v2.write_chart(&output_path, self.offset);
+                    self.output_file = Some(output_path);
+                }
+            }
+
             if let Some(ref output) = self.output_file {
                 ui.label(format!("Output File: {}", output));
             }

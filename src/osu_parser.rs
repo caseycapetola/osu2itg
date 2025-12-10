@@ -2,7 +2,7 @@
 use std::{collections::VecDeque, fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
 //, collections::HashMap};
 use num::Integer;
-use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::get_hit_object_vec_from_data, timing::get_timing_point_vec_from_data}, utils::{common::{get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::parse_file}};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::{HitObject, get_hit_object_vec_from_data}, timing::{TimingPoint, get_timing_point_vec_from_data}}, utils::{common::{ScoreObject, get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::{self, parse_file}}};
 use crate::osu_util::{check_std_v2, next_step};
 use crate::utils::common::{calc_bpm, calc_beat_duration};
 use crate::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType, TimingPointFields};
@@ -636,9 +636,9 @@ impl OsuParserV2 {
         let bpms = self.write_bpms(&mut file);
 
         // SENDING HARDCODED BPM FOR NOW, NEED TO HANDLE BPM CHANGES
-        self.write_steps(&mut file, bpms[0].1).expect("Unable to write steps");
+        // self.write_steps(&mut file, bpms[0].1).expect("Unable to write steps");
         //
-        // self.write_steps_v2(&mut file, bpms).expect("Unable to write steps");
+        self.write_steps_v3(&mut file, bpms).expect("Unable to write steps");
         
 
 
@@ -948,6 +948,195 @@ impl OsuParserV2 {
 
         Ok(())
     }
+
+    fn write_steps_v3(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
+        // Get beat division for all BPMs
+        let beat_division = get_min_beat_division_all(&self.hit_objects, &bpms.clone());
+        println!("Using beat division of {}", beat_division);
+
+        // Combine hit objects and BPM changes into a single timeline
+        let mut timeline: Vec<TimelineEvent> = vec![];
+        for tp in self.timing_points.iter() {
+            if tp.uninherited == true {
+                timeline.push(TimelineEvent {
+                    time: tp.time as f32,
+                    event_type: TimelineEventType::BPMChange(tp.clone()),
+                });
+            }
+        }
+        for obj in self.hit_objects.iter() {
+            timeline.push(TimelineEvent {
+                time: obj.time as f32,
+                event_type: TimelineEventType::HitObject(obj.clone()),
+            });
+        }
+        // Sort timeline by time --> if tie, prioritize timing points
+        timeline.sort_by(|a, b| {
+            if a.time == b.time {
+                match (&a.event_type, &b.event_type) {
+                    (TimelineEventType::BPMChange(_), TimelineEventType::HitObject(_)) => std::cmp::Ordering::Less,
+                    (TimelineEventType::HitObject(_), TimelineEventType::BPMChange(_)) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                }
+            } else {
+                a.time.partial_cmp(&b.time).unwrap()
+            }
+        });
+
+        // Check first event is a timing point and set initial time
+        let mut init_time: f32;
+        // Set initial bpm and beat length
+        let mut current_bpm: f32;
+        let mut beat_length: f32;
+        if let Some(first_event) = timeline.first() {
+            match &first_event.event_type {
+                TimelineEventType::BPMChange(tp) => {
+                    init_time = first_event.time;
+                    current_bpm = calc_bpm(tp.beat_length);
+                    beat_length = calc_beat_duration(current_bpm, 4);
+                },
+                _ => {
+                    println!("First event is not a BPM change, cannot proceed.");
+                    return Ok(());
+                }
+            }
+        } else {
+            println!("Timeline is empty, cannot proceed.");
+            return Ok(());
+        }
+
+
+        // Create vector of ScoreObjects to hold processed notes
+        let mut score_objects: Vec<ScoreObject> = vec![];
+
+        for event in timeline.iter() {
+            match &event.event_type {
+                TimelineEventType::BPMChange(tp) => {
+                    let beat = (event.time - init_time)/beat_length;
+                    let measure_number = (beat/4.0).floor() as i32;
+                    let beat_in_measure = beat % 4.0;
+                    let subdivisions_per_beat = beat_division / 4;
+                    let row_placement = (beat_in_measure * subdivisions_per_beat as f32).round() as i32;
+
+                    let score_object = ScoreObject::new(measure_number, row_placement, false);
+
+                    score_objects.push(score_object.clone());
+
+                    current_bpm = calc_bpm(tp.beat_length);
+                    beat_length = calc_beat_duration(current_bpm, 4);
+                    init_time = event.time;
+
+                    // println!("BPM Change at time {}: New BPM = {}, Beat Length = {}", event.time, current_bpm, beat_length);
+                },
+                TimelineEventType::HitObject(obj) => {
+                    // println!("Hit Object at time {}: Current BPM = {}, Beat Length = {}", event.time, current_bpm, beat_length);
+                    // Process hit object here
+
+                    // Skip spinners (for now)
+                    if obj.object_type & OsuNoteTypeV2::SPINNER == OsuNoteTypeV2::SPINNER {
+                        continue;
+                    }
+
+                    let beat = (event.time - init_time)/beat_length;
+                    let mut measure_number = (beat/4.0).floor() as i32;
+                    let beat_in_measure = beat % 4.0;
+                    let subdivisions_per_beat = beat_division / 4;
+                    let mut row_placement = (beat_in_measure * subdivisions_per_beat as f32).round() as i32;
+
+                    if row_placement == beat_division {
+                        // Edge case where note falls exactly on measure line
+                        // Move to next measure
+                        measure_number += 1;
+                        row_placement = 0;
+                    }
+
+                    let mut score_object = ScoreObject::new(measure_number, row_placement, true);
+                    score_object.hit_object_type = Some(obj.clone());
+                    score_objects.push(score_object.clone());
+
+                    // println!("Hit Object at time {}: Measure {}, Row {}", event.time, measure_number, row_placement);
+                },
+            }
+        }
+
+        // Write steps to file based on score_objects
+        file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
+        file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
+
+        // Iterate through score_objects and write to file
+        let mut current_measure = 0;
+        let mut beat_count = 0;
+        let mut foot: Foot = Foot::new(Foot::LEFT);
+        let mut prev_step  = SM5NoteType::LSTEP.to_string();
+        let mut prev_note_type = OsuNoteTypeV2::NONE;
+
+        for score_object in score_objects.iter() {
+            // Fill in empty measures if needed
+            while score_object.measure_number > current_measure {
+                while beat_count < beat_division {
+                    file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                    beat_count += 1;
+                }
+                file.write_all(",\n".as_bytes()).expect("Unable to write data");
+                current_measure += 1;
+                beat_count = 0;
+            }
+
+            // Fill in empty beats within the measure
+            while score_object.beat_within_measure > beat_count {
+                file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+                beat_count += 1;
+            }
+
+            // Write the actual note or BPM change
+            if score_object.is_hit_object {
+                // Check for initial note
+                if prev_note_type == OsuNoteTypeV2::NONE {
+                    if let Some(obj) = &score_object.hit_object_type {
+                        if obj.object_type & OsuNoteTypeV2::SLIDER == OsuNoteTypeV2::SLIDER {
+                            file.write_all(format!("{}\n", SM5NoteType::LHOLD).as_bytes()).expect("Unable to write data");
+                            prev_step = SM5NoteType::LHOLD.to_string();
+                        } else {
+                            file.write_all(format!("{}\n", SM5NoteType::LSTEP).as_bytes()).expect("Unable to write data");
+                        }
+                        prev_note_type = obj.object_type;
+                        foot.switch_foot();
+                        beat_count += 1;
+                        continue;
+                    }
+                }
+
+                prev_step = next_step(prev_step, foot.state, prev_note_type, score_object.hit_object_type.as_ref().unwrap().object_type);
+                file.write_all(format!("{}\n", prev_step).as_bytes()).expect("Unable to write data");
+                prev_note_type = score_object.hit_object_type.as_ref().unwrap().object_type;
+                foot.switch_foot();
+                beat_count += 1;
+            } else {
+                // For BPM changes, we can choose to write a special marker or skip
+                // Here we choose to skip writing anything
+            }
+        }
+        // Complete last measure
+        while beat_count < beat_division {
+            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
+            beat_count += 1;
+        }
+        file.write_all(";\n".as_bytes()).expect("Unable to write data");
+
+        
+
+        Ok(())
+    }
+}
+
+struct TimelineEvent {
+    time: f32,
+    event_type: TimelineEventType,
+}
+
+enum TimelineEventType {
+    HitObject(HitObject),
+    BPMChange(TimingPoint),
 }
 
 #[cfg(test)]
