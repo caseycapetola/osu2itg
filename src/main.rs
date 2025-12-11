@@ -38,11 +38,11 @@ impl eframe::App for MyApp {
                 ui.label(format!("Selected File: {:?}", path.display()));
 
                 ui.horizontal(|ui| {
-                    ui.label("Enter Offset:");
+                    ui.label("Enter Offset (-1 * osu_offset/1000):");
                     ui.add(egui::DragValue::new(&mut self.offset).speed(0.1));
                 });
 
-                if ui.button("Convert to SSC").clicked() {
+                if ui.button("Convert to SSC (LEGACY)").clicked() {
                     let file_path = path.to_string_lossy().to_string();
                     let mut parser = OsuParser::new(file_path.clone());
                     let file_data = parser.parse_file();
@@ -54,12 +54,12 @@ impl eframe::App for MyApp {
             }
 
             if let Some(ref path) = self.selected_file {
-                ui.label("Test Parser V2");
-                if ui.button("Parse with V2").clicked() {
+                ui.label("Convert to SSC V3");
+                if ui.button("Parse with V3").clicked() {
                     let file_path = path.to_string_lossy().to_string();
                     let parser_v2 = OsuParserV2::new(file_path.clone());
-                    let output_path = format!("{}.ssc", file_path.trim_end_matches(".osu"));
-                    parser_v2.write_chart(&output_path, self.offset);
+                    let output_path = format!("{}_v3.ssc", file_path.trim_end_matches(".osu"));
+                    parser_v2.write_chart(&output_path);
                     self.output_file = Some(output_path);
                 }
             }

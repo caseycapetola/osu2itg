@@ -3,6 +3,7 @@ impl OsuNoteTypeV2 {
     pub const TAP: i32 = 0b1;
     pub const SLIDER: i32 = 0b10;
     pub const SPINNER: i32 = 0b1000;
+    pub const NONE: i32 = 0b0;
 }
 
 pub struct OsuModeV2;
