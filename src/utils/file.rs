@@ -15,7 +15,6 @@ pub fn parse_file(file_path: String) -> Vec<String> {
     let data = read_file(file_path);
     let re = Regex::new(r"(\r?\n){2,}").unwrap();
     let sections: Vec<String> = re.split(&data).map(|s| s.to_string()).collect();
-    println!("Parsed {} sections from file", sections.len());
 
     // Slice off osu file version header
     return sections[1..].to_vec();

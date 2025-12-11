@@ -181,7 +181,6 @@ impl OsuParser {
         let data = self.read_file();
         let re = Regex::new(r"(\r?\n){2,}").unwrap();
         let sections: Vec<String> = re.split(&data).map(|s| s.to_string()).collect();
-        println!("Parsed {} sections from file", sections.len());
         return sections;
 
     }
@@ -613,7 +612,7 @@ impl OsuParserV2 {
         parser_v2
     }
 
-    pub fn write_chart(&self, output_path: &str, offset: f32) {
+    pub fn write_chart(&self, output_path: &str) {
         let (successful, error_msg) = check_std_v2(self.general.mode);
         match successful {
             false => panic!("Could not configure ITG file: {}", error_msg),
@@ -632,12 +631,9 @@ impl OsuParserV2 {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
-        file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
+        self.write_offset(&mut file, &self.timing_points);
         let bpms = self.write_bpms(&mut file);
 
-        // SENDING HARDCODED BPM FOR NOW, NEED TO HANDLE BPM CHANGES
-        // self.write_steps(&mut file, bpms[0].1).expect("Unable to write steps");
-        //
         self.write_steps_v3(&mut file, bpms).expect("Unable to write steps");
         
 
@@ -660,6 +656,19 @@ impl OsuParserV2 {
         file.write(format!("#STEPSTITLE:{};\n", self.metadata.version).as_bytes()).expect("Unable to write data");
     }
 
+    // Write offset to chart file, based on osu! file offset
+    fn write_offset(&self, file: &mut File, timing_points: &Vec<TimingPoint>) {
+        let mut offset: f32 = 0.0;
+        for tp in timing_points.iter() {
+            if tp.uninherited == true {
+                offset = -1.0 * (tp.time as f32 / 1000.0);
+                break;
+            }
+        }
+        file.write(format!("#OFFSET:{};\n", offset).as_bytes()).expect("Unable to write data");
+
+    }
+    
     // Write BPM changes to chart file, return vector of (time, bpm) tuples
     fn write_bpms(&self, file: &mut File) -> Vec<(f32, f32)> {
         let mut res: Vec<(f32, f32)> = vec![];
@@ -814,7 +823,6 @@ impl OsuParserV2 {
     fn write_steps_v3(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
         // Get beat division for all BPMs
         let beat_division = get_min_beat_division_all(&self.hit_objects, &bpms.clone());
-        println!("Using beat division of {}", beat_division);
 
         // Combine hit objects and BPM changes into a single timeline
         let timeline = build_timeline(&self.hit_objects, &self.timing_points);
