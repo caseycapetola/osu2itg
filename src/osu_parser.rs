@@ -1,8 +1,8 @@
 // osu!std file parser
-use std::{collections::VecDeque, fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
+use std::{fs::File, io::{self, Read, Write}, path::{Path, PathBuf}, vec};
 //, collections::HashMap};
 use num::Integer;
-use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::{HitObject, get_hit_object_vec_from_data}, timing::{TimingPoint, get_timing_point_vec_from_data}}, utils::{common::{ScoreObject, get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::{self, parse_file}}};
+use crate::{file_tools::{OsuArtist, OsuAudioFilename, OsuPreviewTime, OsuTitle, OsuVersion, SM5Artist, SM5AudioFilename, SM5PreviewTime, SM5Title, SM5Version, Serialize}, osu::{colour::get_colours_from_data, hit_object::{HitObject, get_hit_object_vec_from_data}, timing::{TimingPoint, get_timing_point_vec_from_data}}, utils::{common::{ScoreObject, _get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::{parse_file}}};
 use crate::osu_util::{check_std_v2, next_step};
 use crate::utils::common::{calc_bpm, calc_beat_duration};
 use crate::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType, TimingPointFields};
@@ -687,7 +687,11 @@ impl OsuParserV2 {
                     prev_beat_duration = tp.beat_length
                 } else {
                     let beat_count = prev_beat_count + ((tp.time as f32 - prev_time + manual_offset) / prev_beat_duration * 1000.0).round() / 1000.0;
-                    bpm_string.push_str(&format!("{:.5}={:.3},", snap_beat_to_interval(beat_count, 1.0 / (192.0/4.0)), bpm)); // HARDCODED TO 192NDS FOR NOW --> NEED TO CALCULATE MIN BEAT DIVISION TO BE MORE ACCURATE
+                    
+                    // HARDCODED TO 192NDS FOR NOW --> NEED TO CALCULATE MIN BEAT DIVISION TO BE MORE ACCURATE --> This would involve refactoring to print BPMs in write_chart_v3 somewhere
+                    // There's a possiblility that we may want to snap BPM changes to nearest beat based on min beat division, but seems to be working for now
+                    bpm_string.push_str(&format!("{:.5}={:.3},", snap_beat_to_interval(beat_count, 1.0 / (192.0/4.0)), bpm));
+                    
                     prev_bpm = bpm;
                     prev_time = tp.time as f32;
                     prev_beat_count = beat_count;
@@ -720,7 +724,8 @@ impl OsuParserV2 {
         res
     }
 
-    fn write_steps(&self, file: &mut File, bpm: f32) -> io::Result<()> {
+    // Legacy implementation of write_steps for single BPM charts
+    fn _write_steps(&self, file: &mut File, bpm: f32) -> io::Result<()> {
         // Write standard header
         file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
         file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
@@ -728,7 +733,7 @@ impl OsuParserV2 {
         // Write one empty measure for buffer
         file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
 
-        let beat_division = get_min_beat_division(&self.hit_objects, bpm);
+        let beat_division = _get_min_beat_division(&self.hit_objects, bpm);
         println!("Using beat division of {}", beat_division);
         let beat_length = calc_beat_duration(bpm, beat_division);
         println!("Calculated beat length of {}", beat_length);
@@ -806,185 +811,13 @@ impl OsuParserV2 {
         Ok(())
     }
 
-    fn write_steps_v2(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
-        // Placeholder for potential future implementation
-        // Write standard header
-        file.write_all("//--------------- dance-single - osu2itg ----------------\n".as_bytes())?;
-        file.write_all("#NOTEDATA:;\n#STEPSTYPE:dance-single;\n#DESCRIPTION:;\n#DIFFICULTY:Challenge;\n#METER:727;\n#RADARVALUES:0,0,0,0,0;\n#CREDIT:osu2itg;\n#NOTES:\n".as_bytes())?;
-
-        // Write one empty measure for buffer
-        // file.write_all("0000\n0000\n0000\n0000\n,\n".as_bytes()).expect("Unable to write data");
-
-        // Pop initial bpm info from vector
-        let mut bpm_queue: VecDeque<(f32, f32)> = VecDeque::from(bpms.clone());
-        if bpm_queue.is_empty() {
-            println!("No BPM changes found, exiting write_steps_v2");
-            return Ok(());
-        }
-
-        // Set initial beat division and beat length
-        let beat_division = get_min_beat_division_all(&self.hit_objects, &bpms.clone());
-
-        let (mut prev_bpm_time, mut prev_bpm) = bpm_queue.pop_front().unwrap();
-        let mut beat_length = calc_beat_duration(prev_bpm, beat_division);
-
-        let mut prev_time: f32;
-        let mut curr_time: f32 = 0.0;
-
-        // Track location in measure
-        let mut beat_count = 0;
-
-        // Track step location/cadence
-        let mut foot: Foot = Foot::new(Foot::LEFT);
-        let mut prev_step  = SM5NoteType::LSTEP.to_string();
-        let mut prev_note_type = OsuNoteTypeV2::TAP;
-
-        for obj in self.hit_objects.iter() {
-            // Skip spinners (for now)
-            if obj.object_type & OsuNoteTypeV2::SPINNER != 0 {
-                continue;
-            }
-            prev_time = curr_time;
-            curr_time = obj.time as f32;
-            let manual_offset = 3.0; // Adjust for rounding errors
-
-            // Edge Case: First note
-            if prev_time == 0.0 {
-                // We need to check to see if first note is after the first timing point
-                // Fill the space with empty measures if so
-                while curr_time > prev_bpm_time {
-                    let mut dist = ((curr_time - prev_bpm_time + manual_offset)/beat_length).floor();
-                    
-                    while dist > 1.0 {
-                        if beat_count == beat_division {
-                            file.write_all(",\n".as_bytes()).expect("Unable to write data");
-                            beat_count = 0;
-                        }
-                        file.write_all("0000\n".as_bytes()).expect("Unable to write data");
-                        beat_count += 1;
-                        dist -= 1.0;
-                    }
-                    // Need to check end of measure if we exit while loop at precise point
-                    if beat_count == beat_division {
-                        file.write_all(",\n".as_bytes()).expect("Unable to write data");
-                        beat_count = 0;
-                    }
-
-                    // Pop next bpm change, if available
-                    if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front(){
-                        prev_bpm_time = next_bpm_time;
-                        prev_bpm = next_bpm;
-                        beat_length = calc_beat_duration(prev_bpm, beat_division);
-                    } else {
-                        break;
-                    }
-                }
-
-                // Print first note
-                if obj.object_type == OsuNoteTypeV2::SLIDER {
-                    file.write_all(format!("{}\n", SM5NoteType::LHOLD).as_bytes()).expect("Unable to write data");
-                    prev_step = SM5NoteType::LHOLD.to_string();
-                } else {
-                    file.write_all(format!("{}\n", SM5NoteType::LSTEP).as_bytes()).expect("Unable to write data");
-                }
-                prev_note_type = obj.object_type;
-                foot.switch_foot();
-                beat_count += 1;
-                println!("Completed first note at time {}", curr_time);
-                continue;
-            }
-
-            // Check for BPM changes between previous and current note
-            while curr_time > prev_bpm_time {
-                // Need to fill in empty measures up to BPM change
-                let mut dist = ((prev_bpm_time - prev_time + manual_offset)/beat_length).floor();
-                while dist > 1.0 {
-                    if beat_count == beat_division {
-                        file.write_all(",\n".as_bytes()).expect("Unable to write data");
-                        beat_count = 0;
-                    }
-                    file.write_all("0000\n".as_bytes()).expect("Unable to write data");
-                    beat_count += 1;
-                    dist -= 1.0;
-                }
-                // Update previous time to BPM change time
-                prev_time = prev_bpm_time;
-                // Pop next bpm change, if available
-                if let Some((next_bpm_time, next_bpm)) = bpm_queue.pop_front() {
-                    prev_bpm_time = next_bpm_time;
-                    prev_bpm = next_bpm;
-                    beat_length = calc_beat_duration(prev_bpm, beat_division);
-                } else {
-                    break;
-                }
-            }
-
-            // Now process the current note
-            let mut dist =  ((curr_time - prev_time + manual_offset)/beat_length).floor();
-            while dist > 1.0 {
-                if beat_count == beat_division {
-                    file.write_all(",\n".as_bytes()).expect("Unable to write data");
-                    beat_count = 0;
-                }
-                file.write_all("0000\n".as_bytes()).expect("Unable to write data");
-                beat_count += 1;
-                dist -= 1.0;
-            }
-            // Need to check end of measure if we exit while loop at precise point
-            if beat_count == beat_division {
-                file.write_all(",\n".as_bytes()).expect("Unable to write data");
-                beat_count = 0;
-            }
-            prev_step = next_step(prev_step, foot.state, prev_note_type, obj.object_type);
-            file.write_all(format!("{}\n", prev_step).as_bytes()).expect("Unable to write data");
-            prev_note_type = obj.object_type;
-            foot.switch_foot();
-            beat_count += 1;
-        }
-
-        // Complete last measure
-        while beat_count < beat_division {
-            file.write_all("0000\n".as_bytes()).expect("Unable to write data");
-            beat_count += 1;
-        }
-        file.write_all(";\n".as_bytes()).expect("Unable to write data");
-
-        Ok(())
-    }
-
     fn write_steps_v3(&self, file: &mut File, bpms: Vec<(f32, f32)>) -> io::Result<()> {
         // Get beat division for all BPMs
         let beat_division = get_min_beat_division_all(&self.hit_objects, &bpms.clone());
         println!("Using beat division of {}", beat_division);
 
         // Combine hit objects and BPM changes into a single timeline
-        let mut timeline: Vec<TimelineEvent> = vec![];
-        for tp in self.timing_points.iter() {
-            if tp.uninherited == true {
-                timeline.push(TimelineEvent {
-                    time: tp.time as f32,
-                    event_type: TimelineEventType::BPMChange(tp.clone()),
-                });
-            }
-        }
-        for obj in self.hit_objects.iter() {
-            timeline.push(TimelineEvent {
-                time: obj.time as f32,
-                event_type: TimelineEventType::HitObject(obj.clone()),
-            });
-        }
-        // Sort timeline by time --> if tie, prioritize timing points
-        timeline.sort_by(|a, b| {
-            if a.time == b.time {
-                match (&a.event_type, &b.event_type) {
-                    (TimelineEventType::BPMChange(_), TimelineEventType::HitObject(_)) => std::cmp::Ordering::Less,
-                    (TimelineEventType::HitObject(_), TimelineEventType::BPMChange(_)) => std::cmp::Ordering::Greater,
-                    _ => std::cmp::Ordering::Equal,
-                }
-            } else {
-                a.time.partial_cmp(&b.time).unwrap()
-            }
-        });
+        let timeline = build_timeline(&self.hit_objects, &self.timing_points);
 
         // Check first event is a timing point and set initial time
         let mut init_time: f32;
@@ -1142,6 +975,39 @@ impl OsuParserV2 {
 struct TimelineEvent {
     time: f32,
     event_type: TimelineEventType,
+}
+
+// Combine hit objects and BPM changes into a single timeline and sort by time
+fn build_timeline(hit_objects: &Vec<HitObject>, timing_points: &Vec<TimingPoint>) -> Vec<TimelineEvent> {
+    let mut timeline: Vec<TimelineEvent> = vec![];
+        for tp in timing_points.iter() {
+            if tp.uninherited == true {
+                timeline.push(TimelineEvent {
+                    time: tp.time as f32,
+                    event_type: TimelineEventType::BPMChange(tp.clone()),
+                });
+            }
+        }
+        for obj in hit_objects.iter() {
+            timeline.push(TimelineEvent {
+                time: obj.time as f32,
+                event_type: TimelineEventType::HitObject(obj.clone()),
+            });
+        }
+        // Sort timeline by time --> if tie, prioritize timing points
+        timeline.sort_by(|a, b| {
+            if a.time == b.time {
+                match (&a.event_type, &b.event_type) {
+                    (TimelineEventType::BPMChange(_), TimelineEventType::HitObject(_)) => std::cmp::Ordering::Less,
+                    (TimelineEventType::HitObject(_), TimelineEventType::BPMChange(_)) => std::cmp::Ordering::Greater,
+                    _ => std::cmp::Ordering::Equal,
+                }
+            } else {
+                a.time.partial_cmp(&b.time).unwrap()
+            }
+        });
+
+    timeline
 }
 
 enum TimelineEventType {

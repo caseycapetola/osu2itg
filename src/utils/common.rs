@@ -16,6 +16,9 @@ pub fn calc_bpm(beat_length: f32) -> f32 {
 }
 
 // Calculate quarter note duration (in milliseconds) from BPM
+// 240000.0/(bpm*beat_division as f32)
+// 4*(60000.0)/(bpm*beat_division as f32) --> Gives standard beat length depending on bpm and beat division
+// i.e. for 120 bpm and beat division of 4, gives 500 ms per beat; for 120 bpm and beat division of 8, gives 250 ms per beat
 pub fn calc_beat_duration(bpm: f32, beat_division: i32) -> f32 {
     if bpm <= 0.0 {
         return 0.0;
@@ -23,11 +26,9 @@ pub fn calc_beat_duration(bpm: f32, beat_division: i32) -> f32 {
     240000.0 / (bpm * beat_division as f32)
 }
 
-// 240000.0/(bpm*beat_division as f32)
-// 4*(60000.0)/(bpm*beat_division as f32) --> Gives standard beat length depending on bpm and beat division
-// i.e. for 120 bpm and beat division of 4, gives 500 ms per beat; for 120 bpm and beat division of 8, gives 250 ms per beat
-
-pub fn get_min_beat_division(hit_objects: &Vec<HitObject>, bpm: f32) -> i32 {
+// Returns the minimum beat division required to represent all hit objects accurately for a single BPM chart
+// Legacy implementation for single BPM charts
+pub fn _get_min_beat_division(hit_objects: &Vec<HitObject>, bpm: f32) -> i32 {
     let mut prev_note_time: f32 = 0.0;
     let manual_offset: f32 = 2.0; // To avoid floating point errors
     let qn_duration = calc_beat_duration(bpm, 4); // Quarter note duration
