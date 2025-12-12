@@ -1,31 +1,29 @@
 # osu2itg
 
-A tool to convert osu!std beatmaps to ITG charts
+A tool to convert osu!std beatmaps to ITG charts. osu2itg will parse through an osu!std beatmap and convert it into a playable ITG chart.
 
-## `.osu` Fields
+<!-- ## `.osu` Fields
 
-Documentation for fields in the `.osu` file format is well documented and can be found [here](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29).
-
-## `.ssc/.sm` Fields
-
-- `#BPMS:<start-beat>=<bpm>, ...;` &#8594; `start-beat = time-signature*measure-count`
+Documentation for fields in the `.osu` file format is well documented and can be found in the [osu! wiki](https://osu.ppy.sh/wiki/en/Client/File_formats/osu_%28file_format%29). -->
 
 ## Run Locally
 
-Currently, osu2itg is **only supported for Windows platform**
-
-To run osu2itg locally, first install Rust and Cargo (guide can be found [here](https://doc.rust-lang.org/cargo/getting-started/installation.html))
+To run osu2itg locally, first install Rust and Cargo (guide can be found in the [Rust documentation](https://doc.rust-lang.org/cargo/getting-started/installation.html))
 
 Once installed, run the following commands in your local terminal:
 
-Windows Powershell
+For Mac/Linux/Windows Powershell:
 
 ```[bash]
 git clone https://github.com/caseycapetola/osu2itg.git
 cd osu2itg
-cargo run
+cargo run -- <INPUT_FILEPATH>
 ```
 
-Inside the interface, click "Select .osu File", then select the .osu file you would like to convert to a .ssc file. Configure the offset (or you can do this in your stepchart editor), then click "Convert to SSC". This will create a new file in the same directory as your .osu file.
+Where `INPUT_FILEPATH` is the absolute path of the `.osu` file you would like to convert.
 
-_Note_: The current version of osu2itg only supports osu! charts with a constant BPM. **Variable BPM charts will not convert properly**.
+The `.ssc` output file will be written into the same directory as the `.osu` file.
+
+## Known Limitations
+
+For songs with a high number of BPM changes, it is possible that the chart will become out of sync with the song. Some manual tuning of offsets may be required.
