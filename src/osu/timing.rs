@@ -1,4 +1,4 @@
-use crate::constants::TimingPointFields;
+use crate::utils::constants::TimingPointFields;
 
 pub fn get_timing_point_vec_from_data(data: String) -> Vec<TimingPoint> {
     let mut timing_points = Vec::new();

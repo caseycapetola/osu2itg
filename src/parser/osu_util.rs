@@ -1,5 +1,5 @@
 use rand::Rng;
-use crate::constants::*;
+use crate::utils::constants::*;
 
 // Checks if file is osu!std file
 pub fn check_std_v2(mode: i32) -> (bool, &'static str) {

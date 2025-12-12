@@ -1,15 +1,11 @@
 pub mod osu;
-mod osu_parser;
-mod osu_util;
-mod file_tools;
-mod constants;
+mod parser;
 mod utils;
 
 use eframe::egui;
 use rfd::FileDialog;
 use std::path::PathBuf;
-use crate::osu_parser::OsuParser;
-use crate::osu_parser::OsuParserV2;
+use crate::parser::osu_parser::OsuParserV2;
 
 struct MyApp {
     selected_file: Option<PathBuf>,
@@ -42,23 +38,11 @@ impl eframe::App for MyApp {
                     ui.add(egui::DragValue::new(&mut self.offset).speed(0.1));
                 });
 
-                if ui.button("Convert to SSC (LEGACY)").clicked() {
-                    let file_path = path.to_string_lossy().to_string();
-                    let mut parser = OsuParser::new(file_path.clone());
-                    let file_data = parser.parse_file();
-                    let output_path = format!("{}.ssc", file_path.trim_end_matches(".osu"));
-
-                    parser.write_chart(&file_data, &output_path, self.offset);
-                    self.output_file = Some(output_path);
-                }
-            }
-
-            if let Some(ref path) = self.selected_file {
-                ui.label("Convert to SSC V3");
-                if ui.button("Parse with V3").clicked() {
+                ui.label("Convert to SSC");
+                if ui.button("Parse to SSC").clicked() {
                     let file_path = path.to_string_lossy().to_string();
                     let parser_v2 = OsuParserV2::new(file_path.clone());
-                    let output_path = format!("{}_v3.ssc", file_path.trim_end_matches(".osu"));
+                    let output_path = format!("{}.ssc", file_path.trim_end_matches(".osu"));
                     parser_v2.write_chart(&output_path);
                     self.output_file = Some(output_path);
                 }
