@@ -24,6 +24,14 @@ Where `INPUT_FILEPATH` is the absolute path of the `.osu` file you would like to
 
 The `.ssc` output file will be written into the same directory as the `.osu` file.
 
+## Use as a Library
+
+To use osu2itg as a library in a separate project, include the follwing in the `Cargo.toml` file of the project:
+
+```rust
+osu2itg = { git = "https://github.com/caseycapetola/osu2itg" }
+```
+
 ## Known Limitations
 
 For songs with a high number of BPM changes, it is possible that the chart will become out of sync with the song. Some manual tuning of offsets may be required.
