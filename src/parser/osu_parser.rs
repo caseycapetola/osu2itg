@@ -1,7 +1,7 @@
 // osu!std file parser
 use std::{fs::File, io::{self, Write}, path::{Path}, vec};
 //, collections::HashMap};
-use crate::{osu::{colour::get_colours_from_data, hit_object::{HitObject, get_hit_object_vec_from_data}, timing::{TimingPoint, get_timing_point_vec_from_data}}, utils::{common::{ScoreObject, _get_min_beat_division, get_min_beat_division_all, snap_beat_to_interval}, file::{parse_file}}};
+use crate::{osu::{colour::get_colours_from_data, events::{Event, get_event_vec_from_data}, hit_object::{HitObject, get_hit_object_vec_from_data}, timing::{TimingPoint, get_timing_point_vec_from_data}}, utils::{common::{_get_min_beat_division, ScoreObject, get_min_beat_division_all, snap_beat_to_interval}, file::parse_file}};
 use crate::parser::osu_util::{check_std_v2, next_step};
 use crate::utils::common::{calc_bpm, calc_beat_duration};
 use crate::utils::constants::{Foot, OsuFields, OsuNoteTypeV2, SM5NoteType};
@@ -13,7 +13,7 @@ pub struct OsuParserV2 {
     _editor: osu::editor::Editor,
     metadata: osu::metadata::Metadata,
     _difficulty: osu::difficulty::Difficulty,
-    _events: osu::events::Events,
+    events: Vec<osu::events::Event>,
     timing_points: Vec<osu::timing::TimingPoint>,
     _colours: Vec<osu::colour::Colour>,
     pub hit_objects: Vec<osu::hit_object::HitObject>,
@@ -28,7 +28,7 @@ impl OsuParserV2 {
             _editor: osu::editor::Editor::new(file_data[OsuFields::EDITOR].clone()),
             metadata: osu::metadata::Metadata::new(file_data[OsuFields::METADATA].clone()),
             _difficulty: osu::difficulty::Difficulty::new(file_data[OsuFields::DIFFICULTY].clone()),
-            _events: osu::events::Events::new(file_data[OsuFields::EVENTS].clone()),
+            events: get_event_vec_from_data(file_data[OsuFields::EVENTS].clone()),
             timing_points: get_timing_point_vec_from_data(file_data[OsuFields::TIMING_POINTS].clone()),
             _colours: get_colours_from_data(file_data[OsuFields::COLOURS].clone()),
             hit_objects: get_hit_object_vec_from_data(file_data[OsuFields::HIT_OBJECTS].clone()),
@@ -56,6 +56,7 @@ impl OsuParserV2 {
         file.write(b"#CREDIT:osu2itg;\n#SELECTABLE:YES;\n").expect("Unable to write data");
         self.write_general(&mut file);
         self.write_metadata(&mut file);
+        self.write_events(&mut file);
         self.write_offset(&mut file, &self.timing_points);
         let bpms = self.write_bpms(&mut file);
 
@@ -79,6 +80,17 @@ impl OsuParserV2 {
         file.write(format!("#TITLE:{};\n", self.metadata.title_unicode).as_bytes()).expect("Unable to write data");
         file.write(format!("#ARTIST:{};\n", self.metadata.artist_unicode).as_bytes()).expect("Unable to write data");
         file.write(format!("#STEPSTITLE:{};\n", self.metadata.version).as_bytes()).expect("Unable to write data");
+    }
+
+    // Write events (i.e. background image) to chart file
+    fn write_events(&self, file: &mut File) {
+        // Write background image
+        for event in self.events.iter() {
+            if event.event_type == Event::BACKGROUND.to_string() {
+                file.write(format!("#BACKGROUND:{};\n", event.event_params[0]).as_bytes()).expect("Unable to write data");
+                break;
+            }
+        }
     }
 
     // Write offset to chart file, based on osu! file offset
